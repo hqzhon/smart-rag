@@ -7,6 +7,7 @@
 ### 1. 环境要求
 
 - Python 3.9+
+- Node.js 16+
 - 16GB+ 内存推荐
 - 100GB+ 可用存储空间
 
@@ -28,19 +29,39 @@ cp .env.example .env
 # 编辑 .env 文件，配置必要的参数
 ```
 
-### 4. 启动系统
+### 4. 启动后端服务
 
 ```bash
 python run.py
 ```
 
-系统将在 http://localhost:8001 启动
+后端API将在 http://localhost:8001 启动
+
+### 5. 启动前端服务
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+前端界面将在 http://localhost:3001 启动
 
 ## 📖 使用指南
 
 ### Web界面使用
 
-1. **访问系统**：打开浏览器访问 http://localhost:8000
+#### 启动前端
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+前端将在 http://localhost:3001 启动
+
+#### 使用步骤
+1. **访问系统**：打开浏览器访问 http://localhost:3001
 2. **上传文档**：选择医疗PDF文件并上传
 3. **等待处理**：系统会自动处理文档并建立索引
 4. **开始查询**：在查询框中输入医疗相关问题
@@ -72,22 +93,18 @@ curl -X POST "http://localhost:8001/api/v1/chat/query" \
      }'
 ```
 
-### WebSocket实时查询
+### 流式查询
 
-```javascript
-const ws = new WebSocket('ws://localhost:8001/ws/your_session_id');
+系统支持流式响应，可以实时获取生成的回答：
 
-ws.onopen = () => {
-    console.log('WebSocket连接已建立');
-};
-
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log('收到消息:', data);
-};
-
-// 发送查询
-ws.send('糖尿病的治疗方法有哪些？');
+```bash
+curl -X POST "http://localhost:8001/api/v1/chat/stream" \
+     -H "accept: application/json" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "query": "糖尿病的治疗方法有哪些？",
+       "session_id": "your_session_id"
+     }'
 ```
 
 ## 🏗️ 系统架构
@@ -121,13 +138,21 @@ ws.send('糖尿病的治疗方法有哪些？');
 
 6. **API接口** (`app/api/`)
    - RESTful API
-   - WebSocket实时通信
+   - 流式响应支持
    - 文档上传和处理
 
 ### 系统流程
 
 ```
-用户查询 → 查询转换 → 混合检索 → 结果重排序 → 上下文构建 → LLM生成 → 回答后处理 → 返回结果
+用户查询 → 查询转换 → 混合检索 → 结果重排序 → 上下文构建 → LLM流式生成 → 回答后处理 → 返回结果
+```
+
+### 部署架构
+
+```
+前端服务 (http://localhost:3001) ← → 后端API (http://localhost:8001)
+                                      ↓
+                              向量数据库 + 文档存储
 ```
 
 ## 🔧 开发指南
@@ -155,7 +180,7 @@ medical-rag-system/
 │   ├── chroma_db/          # 向量数据库
 │   ├── processed/          # 处理后数据
 │   └── raw/                # 原始数据
-├── frontend/               # 前端代码
+├── frontend/               # 前端代码 (独立React应用)
 ├── logs/                   # 日志文件
 ├── scripts/                # 脚本工具
 ├── .env                    # 环境变量
@@ -194,13 +219,13 @@ medical-rag-system/
 
 2. **生成性能优化**
    - 上下文压缩和筛选
-   - 流式响应
+   - 流式响应提升用户体验
    - 缓存常见查询
 
 3. **系统性能优化**
    - 异步处理
-   - 任务队列
-   - 分布式部署
+   - 前后端分离架构
+   - 分布式部署支持
 
 ## 📝 许可证
 
