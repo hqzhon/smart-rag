@@ -1,0 +1,57 @@
+"""
+重排序器
+"""
+
+from typing import List, Dict, Any
+from app.workflow.qianwen_client import get_qianwen_client
+from app.utils.logger import setup_logger
+
+logger = setup_logger(__name__)
+
+
+class QianwenReranker:
+    """千问重排序器（异步）"""
+    
+    async def rerank_documents(
+        self, 
+        query: str, 
+        documents: List[Dict[str, Any]], 
+        top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """异步重排序文档
+        
+        Args:
+            query: 查询文本
+            documents: 待排序的文档列表
+            top_k: 返回的文档数量
+            
+        Returns:
+            重排序后的文档列表
+        """
+        if not documents:
+            return []
+            
+        try:
+            doc_texts = [doc['page_content'] for doc in documents]
+            
+            client = await get_qianwen_client()
+            async with client as c:
+                rerank_results = await c.rerank_documents(
+                    query=query,
+                    documents=doc_texts,
+                    top_k=top_k
+                )
+            
+            reranked_docs = []
+            for idx, score in rerank_results:
+                if idx < len(documents):
+                    doc = documents[idx].copy()
+                    doc['rerank_score'] = score
+                    reranked_docs.append(doc)
+            
+            logger.debug(f"千问重排序完成，返回{len(reranked_docs)}个文档")
+            return reranked_docs
+            
+        except Exception as e:
+            logger.warning(f"千问重排序失败，使用原始排序: {str(e)}")
+            return documents[:top_k]
