@@ -138,8 +138,14 @@ class DocumentService:
                 None, self.document_processor.process_single_document, document.file_path
             )
             
-            # 文本分块
-            chunks = self.text_splitter.split_documents([result])
+            # 文本分块 - 转换为text_splitter期望的格式
+            document_for_splitting = {
+                "text": result.get("standardized_text", result.get("cleaned_text", result.get("raw_text", ""))),
+                "filename": document.filename,
+                "tables": result.get("metadata", {}).get("tables", []),
+                "references": result.get("metadata", {}).get("references", [])
+            }
+            chunks = self.text_splitter.split_documents([document_for_splitting])
             
             # 获取提取的标题
             document_title = result.get('title', document.filename)
@@ -158,7 +164,7 @@ class DocumentService:
                 success=True,
                 total_chunks=len(chunks),
                 processing_time=processing_time,
-                extracted_text_length=len(result["text"]),
+                extracted_text_length=len(result.get("standardized_text", result.get("cleaned_text", result.get("raw_text", "")))),
                 tables_count=len(result.get("tables", [])),
                 references_count=len(result.get("references", [])),
                 images_count=len(result.get("images", []))
@@ -170,24 +176,27 @@ class DocumentService:
             
             # 保存文档信息到数据库
             try:
+                # 获取文档内容
+                content = result.get('standardized_text', result.get('cleaned_text', result.get('raw_text', '')))
+                logger.info(f"准备保存文档内容，长度: {len(content)}")
+                
                 # 直接使用原始文件名，不再提取标题
                 doc_data = {
                     'id': document.id,
                     'title': document.filename,  # 使用原始文件名
-                    'content': result.get('text', ''),
+                    'content': content,
                     'file_path': document.file_path,
                     'file_size': document.file_size,
                     'file_type': document.content_type,
-                    'vectorized': True,  # 新增向量化状态
-                    'vectorization_status': 'completed',
-                    'vectorization_time': datetime.now(),
                     'metadata': {
                         'original_filename': document.filename,  # 保存原始文件名
                         'chunks_count': len(chunks),
                         'processing_time': processing_time,
                         'tables_count': len(result.get('tables', [])),
                         'references_count': len(result.get('references', [])),
-                        'images_count': len(result.get('images', []))
+                        'images_count': len(result.get('images', [])),
+                        'vectorized': True,  # 移到metadata中
+                        'vectorization_status': 'completed'
                     }
                 }
                 
@@ -354,8 +363,22 @@ class DocumentService:
             # 准备向量化数据
             formatted_documents = []
             for i, chunk in enumerate(text_chunks):
+                # 处理不同格式的chunk数据
+                if isinstance(chunk, dict):
+                    # text_splitter返回的字典格式
+                    content = chunk.get('content', str(chunk))
+                    chunk_metadata = chunk.get('metadata', {})
+                elif hasattr(chunk, 'page_content'):
+                    # LangChain Document格式
+                    content = chunk.page_content
+                    chunk_metadata = getattr(chunk, 'metadata', {})
+                else:
+                    # 字符串格式
+                    content = str(chunk)
+                    chunk_metadata = {}
+                
                 formatted_doc = {
-                    "content": chunk.page_content if hasattr(chunk, 'page_content') else str(chunk),
+                    "content": content,
                     "metadata": {
                         "document_id": document_id,
                         "file_name": document.filename,
@@ -364,7 +387,9 @@ class DocumentService:
                         "source": title,  # 添加源文档名到元数据
                         "chunk_index": i,
                         "chunk_id": f"{document_id}_{i}",
-                        "created_at": document.upload_time.isoformat() if document.upload_time else None
+                        "created_at": document.upload_time.isoformat() if document.upload_time else None,
+                        # 合并原有的chunk元数据
+                        **chunk_metadata
                     }
                 }
                 formatted_documents.append(formatted_doc)

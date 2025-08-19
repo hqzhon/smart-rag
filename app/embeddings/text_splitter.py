@@ -204,7 +204,15 @@ class MedicalTextSplitter:
         """
         if not documents:
             return []
-        
+
+        # Debug: 检查传入的documents结构
+        logger.debug(f"split_documents received {len(documents)} documents")
+        for i, doc in enumerate(documents):
+            logger.debug(f"Document {i}: type={type(doc)}, keys={list(doc.keys()) if isinstance(doc, dict) else 'not a dict'}")
+            if isinstance(doc, dict) and "text" in doc:
+                text_value = doc["text"]
+                logger.debug(f"Document {i} text field: type={type(text_value)}, length={len(text_value) if isinstance(text_value, (str, list)) else 'unknown'}")
+
         # 使用智能分块器（如果可用）
         if self.enable_semantic and self.hybrid_splitter:
             try:
@@ -216,7 +224,37 @@ class MedicalTextSplitter:
                     return self._traditional_split_documents(documents)
                 except RuntimeError:
                     # 没有运行中的循环，可以安全使用asyncio.run
-                    chunks = asyncio.run(self.hybrid_splitter.split_documents(documents))
+                    # 提取文档文本内容供hybrid_splitter使用
+                    # 确保text字段是字符串
+                    document_texts = []
+                    for doc in documents:
+                        if not isinstance(doc, dict):
+                            raise ValueError(f"Expected dict, got {type(doc)}: {doc}")
+                        text_value = doc["text"]
+                        if isinstance(text_value, list):
+                            # 如果text是列表，将其转换为字符串
+                            text_value = "\n".join(str(item) for item in text_value)
+                            logger.warning(f"Converted list text to string for document {doc.get('filename', 'unknown')}")
+                        elif not isinstance(text_value, str):
+                            text_value = str(text_value)
+                            logger.warning(f"Converted {type(text_value)} text to string for document {doc.get('filename', 'unknown')}")
+                        document_texts.append(text_value)
+                    chunk_lists = asyncio.run(self.hybrid_splitter.split_documents(document_texts))
+                    
+                    # 将分块结果转换为标准格式
+                    chunks = []
+                    for doc_idx, (doc, doc_chunks) in enumerate(zip(documents, chunk_lists)):
+                        for chunk_idx, chunk_text in enumerate(doc_chunks):
+                            chunks.append({
+                                "content": chunk_text,
+                                "metadata": {
+                                    "source": doc["filename"],
+                                    "chunk_id": chunk_idx,
+                                    "chunk_type": "text",
+                                    "language": self._detect_language(chunk_text)
+                                }
+                            })
+                    
                     logger.debug(f"智能文档分块完成，生成 {len(chunks)} 个块")
                     return chunks
             except Exception as e:
@@ -238,8 +276,27 @@ class MedicalTextSplitter:
         chunks = []
         
         for doc in documents:
+            # 类型检查和错误处理
+            if not isinstance(doc, dict):
+                logger.error(f"传统分块方法收到非字典类型数据: {type(doc)}, 内容: {doc}")
+                raise ValueError(f"Expected dict, got {type(doc)}: {doc}")
+            
+            # 确保text字段存在且为字符串
+            if "text" not in doc:
+                logger.error(f"文档缺少text字段: {doc}")
+                continue
+                
+            text_value = doc["text"]
+            if isinstance(text_value, list):
+                # 如果text是列表，将其转换为字符串
+                text_value = "\n".join(str(item) for item in text_value)
+                logger.warning(f"传统分块中将列表text转换为字符串，文档: {doc.get('filename', 'unknown')}")
+            elif not isinstance(text_value, str):
+                text_value = str(text_value)
+                logger.warning(f"传统分块中将{type(text_value)}类型text转换为字符串，文档: {doc.get('filename', 'unknown')}")
+            
             # 处理主文本
-            text_chunks = self._traditional_split(doc["text"])
+            text_chunks = self._traditional_split(text_value)
             
             for i, chunk in enumerate(text_chunks):
                 chunks.append({
@@ -252,30 +309,66 @@ class MedicalTextSplitter:
                     }
                 })
             
-            # 处理表格
-            for table in doc.get("tables", []):
-                chunks.append({
-                    "content": table["text_description"],
-                    "metadata": {
-                        "source": doc["filename"],
-                        "chunk_type": "table",
-                        "page": table["page"],
-                        "table_index": table["table_index"],
-                        "language": self._detect_language(table["text_description"])
-                    }
-                })
+            # 处理表格 - 支持不同的数据格式
+            tables = doc.get("tables", [])
+            if tables:
+                for i, table in enumerate(tables):
+                    if isinstance(table, dict):
+                        # 如果是字典格式，尝试提取文本内容
+                        table_content = table.get("text_description") or table.get("content") or str(table)
+                        chunks.append({
+                            "content": table_content,
+                            "metadata": {
+                                "source": doc["filename"],
+                                "chunk_type": "table",
+                                "page": table.get("page", table.get("page_number", "unknown")),
+                                "table_index": table.get("table_index", i),
+                                "language": self._detect_language(table_content)
+                            }
+                        })
+                    elif isinstance(table, str):
+                        # 如果是字符串格式，直接使用
+                        chunks.append({
+                            "content": table,
+                            "metadata": {
+                                "source": doc["filename"],
+                                "chunk_type": "table",
+                                "table_index": i,
+                                "language": self._detect_language(table)
+                            }
+                        })
+                    else:
+                        logger.warning(f"Unexpected table format: {type(table)}, skipping")
             
-            # 处理参考文献
-            for ref in doc.get("references", []):
-                chunks.append({
-                    "content": ref["reference_text"],
-                    "metadata": {
-                        "source": doc["filename"],
-                        "chunk_type": "reference",
-                        "reference_id": ref["reference_id"],
-                        "language": self._detect_language(ref["reference_text"])
-                    }
-                })
+            # 处理参考文献 - 支持不同的数据格式
+            references = doc.get("references", [])
+            if references:
+                for i, ref in enumerate(references):
+                    if isinstance(ref, dict):
+                        # 如果是字典格式，尝试提取文本内容
+                        ref_content = ref.get("reference_text") or ref.get("content") or str(ref)
+                        chunks.append({
+                            "content": ref_content,
+                            "metadata": {
+                                "source": doc["filename"],
+                                "chunk_type": "reference",
+                                "reference_id": ref.get("reference_id", i),
+                                "language": self._detect_language(ref_content)
+                            }
+                        })
+                    elif isinstance(ref, str):
+                        # 如果是字符串格式，直接使用
+                        chunks.append({
+                            "content": ref,
+                            "metadata": {
+                                "source": doc["filename"],
+                                "chunk_type": "reference",
+                                "reference_id": i,
+                                "language": self._detect_language(ref)
+                            }
+                        })
+                    else:
+                        logger.warning(f"Unexpected reference format: {type(ref)}, skipping")
         
         logger.info(f"文档分块完成，总块数: {len(chunks)}")
         return chunks
