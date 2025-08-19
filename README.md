@@ -15,9 +15,6 @@
 
 ```bash
 # 安装基础依赖
-pip install -r requirements-simple.txt
-
-# 可选：安装完整依赖（包含AI模型）
 pip install -r requirements.txt
 ```
 
