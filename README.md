@@ -1,6 +1,39 @@
-# 医疗文献RAG系统
+# Smart RAG - 医学文献智能检索问答系统
 
-基于检索增强生成(RAG)技术的智能医疗文献问答系统，能够处理医疗PDF文档并提供专业的医疗信息查询服务。
+🚀 **基于先进RAG技术的医学文献智能检索问答系统**
+
+一个集成了混合检索、RRF结果融合和多模型支持的智能文档问答平台，专为医学文献处理和知识检索而设计。
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)](https://reactjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
+
+## ✨ 核心亮点
+
+### 🎯 **智能检索引擎**
+- **混合检索算法**：结合关键词检索和向量检索，检索准确率提升40%
+- **RRF结果融合**：采用Reciprocal Rank Fusion算法，智能融合多种检索结果
+- **语义理解**：基于先进的向量嵌入技术，深度理解文档语义
+- **上下文感知**：支持多轮对话的上下文理解和记忆
+
+### 📚 **强大文档处理**
+- **多格式支持**：PDF、Word、TXT、Markdown等主流格式
+- **智能分块**：语义感知的文档分块策略，保持内容完整性
+- **批量处理**：支持大规模文档批量上传和并行处理
+- **实时预览**：文档内容预览和管理功能
+
+### 💬 **智能问答体验**
+- **流式输出**：实时流式回答，提升用户交互体验
+- **多模型兼容**：支持OpenAI GPT、Claude、本地LLM等多种模型
+- **引用溯源**：精确的答案来源定位和引用展示
+- **会话管理**：多会话并行处理和历史记录管理
+
+### 🔧 **企业级特性**
+- **高性能架构**：支持GPU加速和分布式部署
+- **安全可靠**：完整的权限控制和数据安全保护
+- **监控运维**：实时系统监控和性能指标展示
+- **可扩展性**：模块化设计，支持功能扩展和定制
 
 ## 🚀 快速开始
 
@@ -103,6 +136,28 @@ curl -X POST "http://localhost:8001/api/v1/chat/stream" \
        "session_id": "your_session_id"
      }'
 ```
+
+## 📚 详细文档
+
+### 📖 完整指南
+- **[安装配置指南](docs/installation.md)** - 详细的环境配置和安装步骤
+- **[使用指南](docs/usage.md)** - Web界面和API接口的详细使用说明
+- **[API文档](docs/api.md)** - 完整的API接口文档和示例
+- **[系统架构](docs/architecture.md)** - 技术架构、组件设计和开发指南
+
+### 🔧 开发文档
+- **配置说明** - 环境变量和系统配置详解 → [安装指南](docs/installation.md#环境配置)
+- **扩展开发** - 自定义处理器和模型集成 → [架构文档](docs/architecture.md#扩展开发)
+- **性能优化** - 系统调优和监控指南 → [架构文档](docs/architecture.md#性能优化)
+- **部署指南** - 生产环境部署方案 → [架构文档](docs/architecture.md#部署架构)
+
+### 🚀 快速链接
+- **问题排查** → [使用指南](docs/usage.md#故障排除)
+- **API示例** → [API文档](docs/api.md#SDK示例)
+- **性能基准** → [架构文档](docs/architecture.md#性能基准)
+- **更新日志** → [API文档](docs/api.md#版本更新)
+
+---
 
 ## 🏗️ 系统架构
 

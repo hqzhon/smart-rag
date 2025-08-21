@@ -10,6 +10,7 @@ from app.retrieval.query_transformer import QueryTransformer
 from app.retrieval.retriever import HybridRetriever
 from app.storage.vector_store import VectorStore
 from app.storage.database import get_db_manager
+from app.embeddings.embeddings import QianwenEmbeddings
 from app.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -26,7 +27,8 @@ class SearchService:
         all_docs = db_manager.get_all_documents_content()
         
         vector_store = VectorStore()
-        self.retriever = HybridRetriever(vector_store, all_docs)
+        embedding_model = QianwenEmbeddings()
+        self.retriever = HybridRetriever(vector_store, self.query_transformer, embedding_model)
         
         logger.info("搜索服务初始化完成")
     

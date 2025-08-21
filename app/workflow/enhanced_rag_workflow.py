@@ -34,7 +34,7 @@ class EnhancedRAGWorkflow:
         
         logger.info("增强版RAG工作流初始化完成")
     
-    async def process_query(self, query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+    async def process_query(self, query: str, session_id: Optional[str] = None, use_metadata_retrieval: bool = False) -> Dict[str, Any]:
         """异步处理用户查询的完整流程"""
         try:
             logger.info(f"开始处理查询: {query}")
@@ -45,7 +45,11 @@ class EnhancedRAGWorkflow:
             if len(expanded_queries) > 1:
                 retrieved_docs = await self.retriever.multi_query_retrieve(expanded_queries, top_k=10)
             else:
-                retrieved_docs = await self.retriever.adaptive_retrieve(rewritten_query, top_k=10)
+                retrieved_docs = await self.retriever.adaptive_retrieve(
+                    rewritten_query, 
+                    top_k=10, 
+                    use_metadata_filter=use_metadata_retrieval
+                )
             
             if not retrieved_docs:
                 return {
@@ -183,7 +187,13 @@ class EnhancedRAGWorkflow:
     
     def _build_context(self, documents: List[Dict[str, Any]]) -> str:
         """构建上下文字符串"""
-        context_parts = [f"{i} (来源: {doc.get('metadata', {}).get('source', '未知')}, 相关度: {doc.get('rerank_score', 0.0):.3f}):\n{doc['page_content']}\n" for i, doc in enumerate(documents, 1)]
+        context_parts = []
+        for i, doc in enumerate(documents, 1):
+            # 兼容不同的文档结构，优先使用page_content，如果没有则使用content
+            content = doc.get('page_content') or doc.get('content', '')
+            source = doc.get('metadata', {}).get('source', '未知')
+            score = doc.get('rerank_score', 0.0)
+            context_parts.append(f"{i} (来源: {source}, 相关度: {score:.3f}):\n{content}\n")
         return "\n".join(context_parts)
     
     def _post_process_response(self, response: str) -> str:
@@ -217,7 +227,7 @@ class EnhancedRAGWorkflow:
             logger.error(f"流式处理查询时出错: {str(e)}", exc_info=True)
             yield f"处理查询时出现错误: {str(e)}"
 
-    async def stream_process_query(self, query: str, session_id: Optional[str] = None) -> AsyncGenerator[Dict[str, Any], None]:
+    async def stream_process_query(self, query: str, session_id: Optional[str] = None, use_metadata_retrieval: bool = False) -> AsyncGenerator[Dict[str, Any], None]:
         """流式处理查询"""
         full_response = ""  # 收集完整回答用于保存
         reference_docs = []  # 收集引用文档用于保存
@@ -227,7 +237,11 @@ class EnhancedRAGWorkflow:
             rewritten_query = self.query_transformer.rewrite_query(query)
             
             yield {"type": "status", "message": "正在检索相关医疗文档..."}
-            retrieved_docs = await self.retriever.adaptive_retrieve(rewritten_query, top_k=10)
+            retrieved_docs = await self.retriever.adaptive_retrieve(
+                rewritten_query, 
+                top_k=10, 
+                use_metadata_filter=use_metadata_retrieval
+            )
             
             if not retrieved_docs:
                 no_result_msg = "抱歉，我没有找到相关的医疗信息。"
@@ -291,7 +305,7 @@ class EnhancedRAGWorkflow:
                 page_number = metadata.get('page_number')
 
                 # 尝试解析content为JSON
-                content = doc['page_content']
+                content = doc.get('page_content', doc.get('content', ''))
                 try:
                     import json as json_module
                     content_json = json_module.loads(content)

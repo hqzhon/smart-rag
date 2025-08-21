@@ -157,6 +157,33 @@ class VectorStore:
             logger.error(f"删除文档向量数据时出错: {str(e)}")
             return False
     
+    async def update_document(self, ids: List[str], metadatas: List[Dict[str, Any]]) -> bool:
+        """更新文档元数据
+        
+        Args:
+            ids: 要更新的文档ID列表
+            metadatas: 新的元数据列表，与ids一一对应
+            
+        Returns:
+            更新是否成功
+        """
+        try:
+            if len(ids) != len(metadatas):
+                logger.error("IDs和metadatas列表长度不匹配")
+                return False
+                
+            self.collection.update(
+                ids=ids,
+                metadatas=metadatas
+            )
+            
+            logger.info(f"成功更新 {len(ids)} 个文档的元数据")
+            return True
+            
+        except Exception as e:
+            logger.error(f"更新文档元数据时出错: {str(e)}")
+            return False
+    
     def get_retriever(self, search_type: str = "similarity", **kwargs: Any) -> "VectorStoreRetriever":
         """获取检索器"""
         return VectorStoreRetriever(self, search_type, **kwargs)
@@ -230,3 +257,12 @@ class MockCollection:
         self.documents = [v for i, v in enumerate(self.documents) if i not in indices_to_remove]
         self.metadatas = [v for i, v in enumerate(self.metadatas) if i not in indices_to_remove]
         self.embeddings = [v for i, v in enumerate(self.embeddings) if i not in indices_to_remove]
+    
+    def update(self, ids: List[str], metadatas: List[Dict[str, Any]]) -> None:
+        """更新文档元数据"""
+        for update_id, new_metadata in zip(ids, metadatas):
+            for i, existing_id in enumerate(self.ids):
+                if existing_id == update_id:
+                    # 更新现有元数据
+                    self.metadatas[i].update(new_metadata)
+                    break

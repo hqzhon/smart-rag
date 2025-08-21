@@ -5,12 +5,17 @@
 from typing import List, Dict, Any, Optional
 import os
 import json
+import uuid
+from redis import Redis
+from rq import Queue
 from .pdf_processor import PDFProcessor
 from .enhanced_pdf_processor import EnhancedPDFProcessor
 from .cleaners import TextCleaner
 from .medical_terminology import MedicalTerminologyStandardizer
 from .quality_filter import TextQualityFilter, ChunkMetadataEnhancer
 from app.utils.logger import setup_logger
+from app.metadata.tasks import generate_metadata_for_chunk
+from datetime import datetime
 
 logger = setup_logger(__name__)
 
@@ -18,25 +23,32 @@ logger = setup_logger(__name__)
 class DocumentProcessor:
     """处理文档集合的类"""
     
-    def __init__(self, input_dir: str, output_dir: str, use_enhanced_parser: bool = True, 
+    def __init__(self, input_dir: str, output_dir: str, vector_store=None, use_enhanced_parser: bool = True, 
                  enable_cleaning: bool = True, enable_terminology_standardization: bool = True,
-                 enable_quality_filtering: bool = True):
+                 enable_quality_filtering: bool = True, enable_async_metadata: bool = True,
+                 redis_host: str = 'localhost', redis_port: int = 6379):
         """初始化文档处理器
         
         Args:
             input_dir: 输入目录，包含PDF文件
             output_dir: 输出目录，存储处理结果
+            vector_store: VectorStore实例，用于存储文档块
             use_enhanced_parser: 是否使用增强的PDF解析器
             enable_cleaning: 是否启用文本清洗
             enable_terminology_standardization: 是否启用术语标准化
             enable_quality_filtering: 是否启用质量过滤
+            enable_async_metadata: 是否启用异步元数据处理
+            redis_host: Redis服务器地址
+            redis_port: Redis服务器端口
         """
         self.input_dir = input_dir
         self.output_dir = output_dir
+        self.vector_store = vector_store  # 确保能访问到VectorStore实例
         self.use_enhanced_parser = use_enhanced_parser
         self.enable_cleaning = enable_cleaning
         self.enable_terminology_standardization = enable_terminology_standardization
         self.enable_quality_filtering = enable_quality_filtering
+        self.enable_async_metadata = enable_async_metadata
         
         os.makedirs(output_dir, exist_ok=True)
         
@@ -48,6 +60,17 @@ class DocumentProcessor:
         if enable_quality_filtering:
             self.quality_filter = TextQualityFilter()
             self.metadata_enhancer = ChunkMetadataEnhancer()
+            
+        # Initialize RQ queue for async metadata processing
+        if self.enable_async_metadata:
+            try:
+                redis_conn = Redis(host=redis_host, port=redis_port, decode_responses=True)
+                self.metadata_queue = Queue('metadata_queue', connection=redis_conn)
+                logger.info(f"RQ队列已初始化，连接到Redis {redis_host}:{redis_port}")
+            except Exception as e:
+                logger.error(f"初始化RQ队列失败: {e}")
+                logger.warning("将禁用异步元数据处理")
+                self.enable_async_metadata = False
         
     def process_single_document(self, file_path: str) -> Dict[str, Any]:
         """处理单个文档（支持PDF和TXT文件）
@@ -122,6 +145,10 @@ class DocumentProcessor:
             # Step 4: Enhanced metadata
             enhanced_metadata = self._enhance_metadata(metadata, file_path)
             
+            # Generate document ID for all processing paths
+            document_id = str(uuid.uuid4())
+            enhanced_metadata["document_id"] = document_id
+            
             # Step 5: Quality filtering and metadata enhancement (if enabled)
             if self.enable_quality_filtering:
                 # Split text into chunks for quality assessment
@@ -137,6 +164,9 @@ class DocumentProcessor:
                 enhanced_chunk_metadata = []
                 for chunk, base_meta in zip(filtered_chunks, chunk_metadata):
                     enhanced_meta = self.metadata_enhancer.enhance_chunk_metadata(chunk, base_meta)
+                    # Generate unique chunk ID for async processing
+                    chunk_id = str(uuid.uuid4())
+                    enhanced_meta["chunk_id"] = chunk_id
                     enhanced_chunk_metadata.append(enhanced_meta)
                 
                 # Update final result with filtered chunks
@@ -147,10 +177,83 @@ class DocumentProcessor:
                     "filtered_chunks": len(filtered_chunks),
                     "filter_ratio": len(filtered_chunks) / len(text_chunks) if text_chunks else 0
                 }
+                
+                # Submit async metadata generation tasks with "store first, update later" strategy
+                if self.enable_async_metadata:
+                    
+                    logger.info(f"准备为 {len(filtered_chunks)} 个文本块创建异步元数据生成任务...")
+                    
+                    # Implement "store first, update later" strategy
+                    if self.vector_store:
+                        for chunk_text, chunk_meta in zip(filtered_chunks, enhanced_chunk_metadata):
+                            chunk_id = chunk_meta.get("chunk_id")
+                            if chunk_id:
+                                try:
+                                    # Prepare initial document data (store first)
+                                    initial_metadata = {
+                                        "document_id": document_id,
+                                        "chunk_index": chunk_meta.get("chunk_index", 0),
+                                        "total_chunks": len(filtered_chunks),
+                                        "created_at": datetime.now().isoformat(),
+                                        "status": "processing",
+                                        "has_metadata": False  # Mark that metadata is not yet generated
+                                    }
+                                    
+                                    # Store to ChromaDB immediately (store first)
+                                    self.vector_store.add_documents(
+                                        texts=[chunk_text],
+                                        metadatas=[initial_metadata],
+                                        ids=[chunk_id]
+                                    )
+                                    logger.debug(f"已存储块 {chunk_id} 到ChromaDB")
+                                    
+                                    # Then submit async metadata generation task (update later)
+                                    job = self.metadata_queue.enqueue(
+                                        generate_metadata_for_chunk,
+                                        chunk_id,
+                                        chunk_text,
+                                        document_id,
+                                        job_timeout='10m',
+                                        result_ttl=86400,
+                                        failure_ttl=604800
+                                    )
+                                    logger.debug(f"任务已推送到队列: chunk_id={chunk_id}, job_id={job.id}")
+                                except Exception as e:
+                                    logger.error(f"存储块 {chunk_id} 到ChromaDB或推送任务失败: {e}")
+                        
+                        logger.info("所有文本块已存储到ChromaDB，元数据生成任务已成功推送到队列")
+                    else:
+                        logger.warning("VectorStore未初始化，跳过ChromaDB存储，仅推送异步任务")
+                        # Fallback to original logic
+                        for chunk_text, chunk_meta in zip(filtered_chunks, enhanced_chunk_metadata):
+                            chunk_id = chunk_meta.get("chunk_id")
+                            if chunk_id:
+                                try:
+                                    job = self.metadata_queue.enqueue(
+                                        generate_metadata_for_chunk,
+                                        chunk_id,
+                                        chunk_text,
+                                        document_id,
+                                        job_timeout='10m',
+                                        result_ttl=86400,
+                                        failure_ttl=604800
+                                    )
+                                    logger.debug(f"任务已推送到队列: chunk_id={chunk_id}, job_id={job.id}")
+                                except Exception as e:
+                                    logger.error(f"推送任务到队列失败 chunk_id={chunk_id}: {e}")
+                        
+                        logger.info("所有元数据生成任务已成功推送到队列")
+                else:
+                    logger.info("异步元数据处理已禁用，跳过任务推送")
+            else:
+                # If quality filtering is disabled, create empty chunk metadata list
+                enhanced_chunk_metadata = []
             
             # Prepare final result
             final_result = {
                 "file_path": file_path,
+                "document_id": document_id,
+                "chunk_ids": [chunk_meta.get("chunk_id") for chunk_meta in enhanced_chunk_metadata if chunk_meta.get("chunk_id")],
                 "raw_text": raw_text,
                 "cleaned_text": cleaned_text,
                 "standardized_text": standardized_text,
@@ -160,7 +263,8 @@ class DocumentProcessor:
                     "raw_length": len(raw_text),
                     "cleaned_length": len(cleaned_text),
                     "standardized_length": len(standardized_text),
-                    "structure_elements": len(structured_elements) if 'structured_elements' in locals() else 0
+                    "structure_elements": len(structured_elements) if 'structured_elements' in locals() else 0,
+                    "total_chunks": len(enhanced_chunk_metadata)
                 }
             }
             

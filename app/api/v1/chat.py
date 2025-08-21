@@ -158,14 +158,22 @@ async def get_global_rag_workflow() -> Optional[EnhancedRAGWorkflow]:
             # 初始化向量存储
             vector_store = VectorStore()
             
-            # 初始化检索器
-            retriever = HybridRetriever(vector_store=vector_store, documents=documents)
-            
-            # 初始化重排序器
-            reranker = QianwenReranker()
+            # 初始化嵌入模型
+            from app.embeddings.embeddings import QianwenEmbeddings
+            embedding_model = QianwenEmbeddings()
             
             # 初始化查询转换器
             query_transformer = QueryTransformer()
+            
+            # 初始化检索器
+            retriever = HybridRetriever(
+                vector_store=vector_store, 
+                query_transformer=query_transformer,
+                embedding_model=embedding_model
+            )
+            
+            # 初始化重排序器
+            reranker = QianwenReranker()
             
             # 创建RAG工作流
             _global_rag_workflow = EnhancedRAGWorkflow(

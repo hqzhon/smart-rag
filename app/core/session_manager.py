@@ -78,14 +78,14 @@ class SessionManager:
             # 不再重复向量化，直接使用现有的向量存储
             # vector_store.add_documents(formatted_documents)  # 移除这行
             
+            # 初始化查询转换器
+            query_transformer = QueryTransformer()
+            
             # 初始化检索器
-            retriever = HybridRetriever(vector_store, formatted_documents)
+            retriever = HybridRetriever(vector_store, query_transformer, embedding_model)
             
             # 初始化重排序器
             reranker = QianwenReranker()
-            
-            # 初始化查询转换器
-            query_transformer = QueryTransformer()
             
             # 初始化增强版RAG工作流
             rag_workflow = EnhancedRAGWorkflow(retriever, reranker, query_transformer)

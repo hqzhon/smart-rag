@@ -66,6 +66,9 @@ async def upload_document(
             message="PDF上传成功，正在处理中..."
         )
         
+    except ValueError as e:
+        logger.warning(f"文件验证失败: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"上传PDF时出错: {str(e)}")
         raise HTTPException(status_code=500, detail=f"上传PDF时出错: {str(e)}")

@@ -15,11 +15,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.processors.pdf_processor import PDFProcessor
 from app.processors.document_processor import DocumentProcessor
-from app.embeddings.embeddings import get_embeddings
+from app.embeddings.embeddings import get_embeddings, QianwenEmbeddings
 from app.embeddings.text_splitter import MedicalTextSplitter
 from app.storage.vector_store import VectorStore
 from app.retrieval.retriever import HybridRetriever
-from app.retrieval.reranker import CrossEncoderReranker
+from app.retrieval.reranker import QianwenReranker
 from app.retrieval.query_transformer import QueryTransformer
 from app.workflow.rag_graph import RAGWorkflow
 from app.workflow.llm_client import LLMClient
@@ -91,11 +91,19 @@ async def test_retrieval(vector_store, documents, query):
     logger.info(f"测试检索: {query}")
     
     try:
+        # 初始化嵌入模型和查询转换器
+        embedding_model = QianwenEmbeddings()
+        query_transformer = QueryTransformer()
+        
         # 创建检索器
-        retriever = HybridRetriever(vector_store, documents)
+        retriever = HybridRetriever(
+            vector_store=vector_store, 
+            query_transformer=query_transformer,
+            embedding_model=embedding_model
+        )
         
         # 检索
-        results = retriever.adaptive_retrieve(query, top_k=5)
+        results = await retriever.retrieve(query, top_k=5)
         
         logger.info(f"检索成功: {len(results)} 个结果")
         
@@ -115,7 +123,7 @@ async def test_reranking(retriever, results, query):
     
     try:
         # 创建重排序器
-        reranker = CrossEncoderReranker()
+        reranker = QianwenReranker()
         
         # 重排序
         reranked_results = reranker.rerank(query, results, top_k=3)

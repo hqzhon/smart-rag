@@ -54,6 +54,9 @@ class QianwenEmbeddings:
         Returns:
             嵌入向量
         """
+        if not text or not text.strip():
+            return []
+            
         try:
             logger.debug(f"开始异步嵌入查询: {text[:50]}...")
             client = await get_qianwen_client()

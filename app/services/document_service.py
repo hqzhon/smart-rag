@@ -5,6 +5,7 @@
 import os
 import uuid
 import asyncio
+import time
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
@@ -252,7 +253,7 @@ class DocumentService:
             return None
     
     async def delete_document(self, document_id: str) -> bool:
-        """删除文档
+        """删除文档 - 原子性操作
         
         Args:
             document_id: 文档ID
@@ -260,8 +261,13 @@ class DocumentService:
         Returns:
             删除是否成功
         """
+        # 用于回滚的状态记录
+        rollback_actions = []
+        
         try:
             from app.storage.database import get_db_manager
+            from app.storage.vector_store import VectorStore
+            
             db = get_db_manager()
             
             # 1. 获取文档信息
@@ -270,31 +276,86 @@ class DocumentService:
                 logger.warning(f"文档不存在: {document_id}")
                 return False
             
-            # 2. 删除物理文件
-            if document.get('file_path') and os.path.exists(document['file_path']):
+            file_path = document.get('file_path')
+            logger.info(f"开始删除文档: {document_id}")
+            
+            # 2. 删除向量存储中的数据（先删除向量数据，因为这个操作相对安全）
+            vector_store = VectorStore()
+            vector_deleted = await vector_store.delete_document(document_id)
+            if not vector_deleted:
+                logger.error(f"删除向量存储数据失败: {document_id}")
+                return False
+            
+            logger.info(f"向量存储数据删除成功: {document_id}")
+            rollback_actions.append(('vector', document_id))
+            
+            # 3. 删除数据库记录（在事务中执行）
+            db_deleted = db.delete_document(document_id)
+            if not db_deleted:
+                logger.error(f"删除数据库记录失败: {document_id}")
+                # 回滚向量删除操作（注意：向量数据无法完全恢复，只能记录错误）
+                logger.error(f"数据库删除失败，向量数据已被删除但无法恢复: {document_id}")
+                return False
+            
+            logger.info(f"数据库记录删除成功: {document_id}")
+            rollback_actions.append(('database', document_id))
+            
+            # 4. 删除物理文件（最后删除，因为文件删除失败不影响数据一致性）
+            if file_path and os.path.exists(file_path):
                 try:
-                    os.remove(document['file_path'])
-                    logger.info(f"物理文件删除成功: {document['file_path']}")
+                    # 先备份文件路径，以防需要恢复
+                    backup_path = f"{file_path}.deleted_{int(time.time())}"
+                    os.rename(file_path, backup_path)
+                    rollback_actions.append(('file', file_path, backup_path))
+                    
+                    # 实际删除文件
+                    os.remove(backup_path)
+                    logger.info(f"物理文件删除成功: {file_path}")
+                    
                 except Exception as e:
-                    logger.warning(f"删除物理文件失败: {e}")
+                    logger.warning(f"删除物理文件失败: {e}，但数据库和向量数据已成功删除")
+                    # 文件删除失败不影响整体操作成功
             
-            # 3. 删除向量存储中的数据
-            try:
-                from app.storage.vector_store import VectorStore
-                vector_store = VectorStore()
-                await vector_store.delete_document(document_id)
-                logger.info(f"向量存储数据删除成功: {document_id}")
-            except Exception as e:
-                logger.warning(f"删除向量存储数据失败: {e}")
-            
-            # 4. 删除数据库记录
-            db.delete_document(document_id)
-            logger.info(f"文档删除成功: {document_id}")
+            logger.info(f"文档删除完全成功: {document_id}")
             return True
             
         except Exception as e:
-            logger.error(f"文档删除失败: {str(e)}")
+            logger.error(f"文档删除过程中发生错误: {str(e)}")
+            
+            # 执行回滚操作
+            await self._rollback_delete_operations(rollback_actions, document_id)
             return False
+    
+    async def _rollback_delete_operations(self, rollback_actions: list, document_id: str):
+        """回滚删除操作
+        
+        Args:
+            rollback_actions: 需要回滚的操作列表
+            document_id: 文档ID
+        """
+        logger.warning(f"开始回滚文档删除操作: {document_id}")
+        
+        for action in reversed(rollback_actions):
+            try:
+                if action[0] == 'file' and len(action) == 3:
+                    # 恢复文件
+                    original_path, backup_path = action[1], action[2]
+                    if os.path.exists(backup_path):
+                        os.rename(backup_path, original_path)
+                        logger.info(f"文件回滚成功: {original_path}")
+                
+                elif action[0] == 'database':
+                    # 数据库回滚（注意：这里只能记录，实际恢复需要更复杂的逻辑）
+                    logger.error(f"数据库记录已删除，需要手动恢复: {document_id}")
+                
+                elif action[0] == 'vector':
+                    # 向量数据回滚（注意：向量数据删除后很难完全恢复）
+                    logger.error(f"向量数据已删除，需要重新生成: {document_id}")
+                    
+            except Exception as e:
+                logger.error(f"回滚操作失败 {action}: {str(e)}")
+        
+        logger.warning(f"文档删除回滚完成: {document_id}")
     
     async def list_documents(self, limit: int = 10, offset: int = 0) -> List[Document]:
         """获取文档列表

@@ -32,7 +32,8 @@ class QianwenReranker:
             return []
             
         try:
-            doc_texts = [doc['page_content'] for doc in documents]
+            # 兼容不同的文档结构，优先使用page_content，如果没有则使用content
+            doc_texts = [doc.get('page_content') or doc.get('content', '') for doc in documents]
             
             client = await get_qianwen_client()
             async with client as c:
