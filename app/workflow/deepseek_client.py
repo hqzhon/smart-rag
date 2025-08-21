@@ -32,15 +32,43 @@ class DeepseekClient:
             "Content-Type": "application/json"
         }
         
+        # 优化的连接池配置
+        self.connector = aiohttp.TCPConnector(
+            limit=200,  # 增加总连接数限制
+            limit_per_host=50,  # 增加每个主机的连接数限制
+            ttl_dns_cache=600,  # 增加DNS缓存时间
+            use_dns_cache=True,
+            enable_cleanup_closed=True,  # 启用清理已关闭的连接
+            keepalive_timeout=60  # 保持连接时间
+        )
+        
+        # 超时配置
+        self.timeout = aiohttp.ClientTimeout(
+            total=120,  # 增加总超时时间
+            connect=30,  # 连接超时
+            sock_read=60  # 读取超时
+        )
+        
+        self.session = None
+        
         logger.info(f"Deepseek客户端初始化完成，模型: {self.model}")
     
     async def __aenter__(self):
         """异步上下文管理器入口"""
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession(
+                connector=self.connector,
+                headers=self.headers,
+                timeout=self.timeout
+            )
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """异步上下文管理器出口"""
-        pass
+        if self.session and not self.session.closed:
+            await self.session.close()
+        if self.connector and not self.connector.closed:
+            await self.connector.close()
     
     async def chat_completion(
         self,
@@ -61,20 +89,11 @@ class DeepseekClient:
             
             url = f"{self.base_url}/chat/completions"
             
-            # 每次调用都创建新的会话，避免会话关闭问题
-            connector = aiohttp.TCPConnector(
-                limit=100,
-                limit_per_host=20,
-                ttl_dns_cache=300,
-                use_dns_cache=True,
-            )
+            # 确保session已初始化
+            if self.session is None or self.session.closed:
+                await self.__aenter__()
             
-            async with aiohttp.ClientSession(
-                connector=connector,
-                headers=self.headers,
-                timeout=aiohttp.ClientTimeout(total=60)
-            ) as session:
-                async with session.post(url, json=payload) as response:
+            async with self.session.post(url, json=payload) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         logger.error(f"Deepseek API错误: {response.status} - {error_text}")
@@ -106,20 +125,11 @@ class DeepseekClient:
             
             url = f"{self.base_url}/chat/completions"
             
-            # 每次调用都创建新的会话
-            connector = aiohttp.TCPConnector(
-                limit=100,
-                limit_per_host=20,
-                ttl_dns_cache=300,
-                use_dns_cache=True,
-            )
+            # 确保session已初始化
+            if self.session is None or self.session.closed:
+                await self.__aenter__()
             
-            async with aiohttp.ClientSession(
-                connector=connector,
-                headers=self.headers,
-                timeout=aiohttp.ClientTimeout(total=60)
-            ) as session:
-                async with session.post(url, json=payload) as response:
+            async with self.session.post(url, json=payload) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         logger.error(f"Deepseek流式API错误: {response.status} - {error_text}")

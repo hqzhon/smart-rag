@@ -635,8 +635,8 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8001
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
 ```
 
 #### 2. 服务编排
@@ -647,7 +647,7 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
       - DATABASE_URL=postgresql://user:pass@db:5432/medical_rag
       - REDIS_URL=redis://redis:6379
@@ -673,7 +673,7 @@ services:
   chroma:
     image: chromadb/chroma:latest
     ports:
-      - "8001:8000"
+      - "8001:8001"
     volumes:
       - chroma_data:/chroma/chroma
 
@@ -706,7 +706,7 @@ spec:
       - name: app
         image: medical-rag:latest
         ports:
-        - containerPort: 8000
+        - containerPort: 8001
         env:
         - name: DATABASE_URL
           valueFrom:
@@ -723,13 +723,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8000
+            port: 8001
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
-            port: 8000
+            port: 8001
           initialDelaySeconds: 5
           periodSeconds: 5
 ```
@@ -747,7 +747,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8000
+    targetPort: 8001
   type: LoadBalancer
 ```
 

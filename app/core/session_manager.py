@@ -5,17 +5,22 @@
 import time
 from typing import Dict, Any, List, Optional
 from app.utils.logger import setup_logger
+from app.core.singletons import SingletonMeta
 
 logger = setup_logger(__name__)
 
 
-class SessionManager:
+class SessionManager(metaclass=SingletonMeta):
     """会话管理器，解决并发安全问题"""
     
     def __init__(self):
+        if hasattr(self, '_initialized'):
+            return
+            
         self.sessions = {}
         self.last_cleanup = time.time()
         self.cleanup_interval = 300  # 5分钟清理一次
+        self._initialized = True
     
     def create_session(self, session_id: str, documents: List[Dict[str, Any]]) -> bool:
         """创建新会话，使用已存在的向量数据库

@@ -47,16 +47,22 @@ class QianwenClient:
         """异步上下文管理器入口"""
         if self.connector is None:
             self.connector = aiohttp.TCPConnector(
-                limit=50,
-                limit_per_host=10,
-                ttl_dns_cache=300,
+                limit=150,  # 增加总连接数限制
+                limit_per_host=30,  # 增加每个主机的连接数限制
+                ttl_dns_cache=600,  # 增加DNS缓存时间
                 use_dns_cache=True,
+                enable_cleanup_closed=True,  # 启用清理已关闭的连接
+                keepalive_timeout=60,  # 保持连接时间
             )
         
         self.session = aiohttp.ClientSession(
             connector=self.connector,
             headers=self.headers,
-            timeout=aiohttp.ClientTimeout(total=30)
+            timeout=aiohttp.ClientTimeout(
+                total=90,  # 增加总超时时间
+                connect=20,  # 连接超时
+                sock_read=45  # 读取超时
+            )
         )
         return self
     

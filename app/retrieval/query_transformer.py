@@ -4,15 +4,18 @@
 
 from typing import List, Dict, Any
 from app.utils.logger import setup_logger
+from app.core.singletons import SingletonMeta
 
 logger = setup_logger(__name__)
 
 
-class QueryTransformer:
+class QueryTransformer(metaclass=SingletonMeta):
     """查询转换器，用于查询扩展和改写"""
     
     def __init__(self):
         """初始化查询转换器"""
+        if hasattr(self, '_initialized'):
+            return
         # 医疗领域同义词词典
         self.medical_synonyms = {
             "高血压": ["高血压病", "原发性高血压", "继发性高血压"],
@@ -34,6 +37,7 @@ class QueryTransformer:
             "预防": ["预防措施", "预防方法", "防护"]
         }
         
+        self._initialized = True
         logger.info("查询转换器初始化完成")
     
     def expand_query(self, query: str) -> List[str]:

@@ -23,7 +23,27 @@ class ChatService:
     def __init__(self):
         """初始化聊天服务"""
         self.session_manager = SessionManager()
-        logger.info("聊天服务初始化完成")
+        self.db = None
+        self.documents_content = None
+        logger.info("聊天服务基础初始化完成")
+    
+    async def async_init(self):
+        """异步初始化重量级组件"""
+        logger.info("开始异步初始化聊天服务重量级组件...")
+        self.db = await self._get_db_manager()
+        self.documents_content = await self._get_documents_content()
+        logger.info("聊天服务异步初始化完成")
+    
+    async def _get_db_manager(self):
+        """异步获取数据库管理器"""
+        from app.storage.database import get_db_manager_async
+        return await get_db_manager_async()
+    
+    async def _get_documents_content(self):
+        """异步获取文档内容"""
+        if self.db:
+            return await self.db.get_all_documents_content_async()
+        return []
     
     async def create_session(self, user_id: str = None) -> str:
         """创建聊天会话，自动关联所有可用文档

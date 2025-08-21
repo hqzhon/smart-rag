@@ -9,7 +9,7 @@ from app.models.query_models import SearchResult, QueryAnalysis
 from app.retrieval.query_transformer import QueryTransformer
 from app.retrieval.retriever import HybridRetriever
 from app.storage.vector_store import VectorStore
-from app.storage.database import get_db_manager
+from app.storage.database import get_db_manager_async
 from app.embeddings.embeddings import QianwenEmbeddings
 from app.utils.logger import setup_logger
 
@@ -22,15 +22,57 @@ class SearchService:
     def __init__(self):
         """初始化搜索服务"""
         self.query_transformer = QueryTransformer()
+        self.db_manager = None
+        self.vector_store = None
+        self.embeddings = None
+        self.retriever = None
+        self.documents_content = None
         
-        db_manager = get_db_manager()
-        all_docs = db_manager.get_all_documents_content()
+        logger.info("搜索服务基础初始化完成")
+    
+    async def async_init(self):
+        """异步初始化重量级组件"""
+        logger.info("开始异步初始化搜索服务重量级组件...")
         
+        # 异步初始化各个组件
+        self.db_manager = await self._get_db_manager()
+        self.vector_store = await self._get_vector_store()
+        self.embeddings = await self._get_embeddings()
+        
+        # 初始化检索器
+        self.retriever = HybridRetriever(
+            vector_store=self.vector_store,
+            query_transformer=self.query_transformer,
+            embedding_model=self.embeddings
+        )
+        
+        # 预加载文档内容
+        self.documents_content = await self._get_documents_content()
+        
+        logger.info("搜索服务异步初始化完成")
+    
+    async def _get_db_manager(self):
+        """异步获取数据库管理器"""
+        from app.storage.database import get_db_manager_async
+        return await get_db_manager_async()
+    
+    async def _get_vector_store(self):
+        """异步获取向量存储"""
+        from app.storage.vector_store import VectorStore
         vector_store = VectorStore()
-        embedding_model = QianwenEmbeddings()
-        self.retriever = HybridRetriever(vector_store, self.query_transformer, embedding_model)
-        
-        logger.info("搜索服务初始化完成")
+        await vector_store.async_init()
+        return vector_store
+    
+    async def _get_embeddings(self):
+        """异步获取嵌入模型"""
+        from app.embeddings.embeddings import QianwenEmbeddings
+        return QianwenEmbeddings()
+    
+    async def _get_documents_content(self):
+        """异步获取文档内容"""
+        if self.db_manager:
+            return await self.db_manager.get_all_documents_content_async()
+        return []
     
     async def search_documents(self, query: str, session_id: Optional[str] = None, 
                              limit: int = 10, threshold: float = 0.5) -> List[SearchResult]:
@@ -139,7 +181,7 @@ class SearchService:
     async def get_search_history(self, user_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """获取搜索历史"""
         try:
-            db = get_db_manager()
+            db = await get_db_manager_async()
             return db.get_search_history(session_id=user_id, limit=limit)
         except Exception as e:
             logger.error(f"获取搜索历史失败: {str(e)}")

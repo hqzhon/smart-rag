@@ -39,6 +39,59 @@ search_service: Optional[SearchService] = None
 
 
 
+async def initialize_services():
+    """并行初始化所有服务组件"""
+    logger.info("开始并行初始化服务...")
+    start_time = time.time()
+    
+    # 定义初始化任务
+    async def init_document_service():
+        logger.info("初始化文档服务...")
+        service = DocumentService()
+        # 异步初始化数据库连接
+        await service.async_init()
+        return service
+    
+    async def init_chat_service():
+        logger.info("初始化聊天服务...")
+        service = ChatService()
+        await service.async_init()
+        return service
+    
+    async def init_search_service():
+        logger.info("初始化搜索服务...")
+        service = SearchService()
+        await service.async_init()
+        return service
+    
+    # 并行执行初始化任务
+    tasks = [
+        init_document_service(),
+        init_chat_service(),
+        init_search_service()
+    ]
+    
+    try:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 检查初始化结果
+        services = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                service_names = ["文档服务", "聊天服务", "搜索服务"]
+                logger.error(f"{service_names[i]}初始化失败: {result}")
+                raise result
+            services.append(result)
+        
+        init_time = time.time() - start_time
+        logger.info(f"所有服务并行初始化完成，耗时: {init_time:.2f}秒")
+        
+        return services
+        
+    except Exception as e:
+        logger.error(f"服务初始化过程中出现错误: {str(e)}")
+        raise
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
@@ -48,10 +101,9 @@ async def lifespan(app: FastAPI):
     global document_service, chat_service, search_service
     
     try:
-        # 初始化服务
-        document_service = DocumentService()
-        chat_service = ChatService()
-        search_service = SearchService()
+        # 并行初始化服务
+        services = await initialize_services()
+        document_service, chat_service, search_service = services
         
         logger.info("所有服务初始化完成")
         
@@ -66,6 +118,27 @@ async def lifespan(app: FastAPI):
     finally:
         # 关闭时清理
         logger.info("医疗RAG系统关闭中...")
+        await cleanup_services()
+
+async def cleanup_services():
+    """清理服务资源"""
+    global document_service, chat_service, search_service
+    
+    cleanup_tasks = []
+    
+    if hasattr(document_service, 'cleanup'):
+        cleanup_tasks.append(document_service.cleanup())
+    if hasattr(chat_service, 'cleanup'):
+        cleanup_tasks.append(chat_service.cleanup())
+    if hasattr(search_service, 'cleanup'):
+        cleanup_tasks.append(search_service.cleanup())
+    
+    if cleanup_tasks:
+        try:
+            await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+            logger.info("服务资源清理完成")
+        except Exception as e:
+            logger.error(f"服务清理过程中出现错误: {str(e)}")
 
 # 创建FastAPI应用
 app = FastAPI(

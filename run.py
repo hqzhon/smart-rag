@@ -25,7 +25,6 @@ def main():
     print(f"服务地址: http://{host}:{port}")
     print(f"调试模式: {debug}")
     print(f"API文档: http://{host}:{port}/docs")
-    print(f"前端页面: http://{host}:{port}")
     
     # 启动服务
     uvicorn.run(

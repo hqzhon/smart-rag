@@ -6,14 +6,18 @@ from typing import List, Dict, Optional, Any
 import json
 import logging
 from app.core.config import get_settings
+from app.core.singletons import SingletonMeta
 
 logger = logging.getLogger(__name__)
 
-class DatabaseManager:
-    """MySQL数据库管理器"""
+class DatabaseManager(metaclass=SingletonMeta):
+    """MySQL数据库管理器 - 单例模式"""
     
     def __init__(self):
         """初始化MySQL数据库管理器"""
+        if hasattr(self, '_initialized'):
+            return
+            
         self.settings = get_settings()
         self.connection_config = {
             'host': self.settings.mysql_host,
@@ -25,29 +29,42 @@ class DatabaseManager:
             'autocommit': True
         }
         
-        self._init_database()
-        logger.info(f"MySQL数据库初始化完成: {self.settings.mysql_host}:{self.settings.mysql_port}")
+        self._initialized = True
+        logger.info(f"MySQL数据库管理器基础初始化完成: {self.settings.mysql_host}:{self.settings.mysql_port}")
     
-    def _get_connection(self):
-        """获取数据库连接"""
-        return pymysql.connect(**self.connection_config)
+    async def async_init(self):
+        """异步初始化数据库连接和表结构"""
+        logger.info("开始异步初始化数据库连接和表结构...")
+        await self._init_database_async()
+        logger.info("数据库异步初始化完成")
     
-    def _init_database(self):
-        """初始化数据库表"""
-        # 首先创建数据库（如果不存在）
-        temp_config = self.connection_config.copy()
-        temp_config.pop('database')
+    async def _init_database_async(self):
+        """异步初始化数据库表"""
+        import asyncio
         
-        try:
-            with pymysql.connect(**temp_config) as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.settings.mysql_database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-                    logger.info(f"数据库 {self.settings.mysql_database} 创建成功或已存在")
-        except Exception as e:
-            logger.error(f"创建数据库失败: {e}")
-            raise
+        def _sync_init():
+            # 首先创建数据库（如果不存在）
+            temp_config = self.connection_config.copy()
+            temp_config.pop('database')
+            
+            try:
+                with pymysql.connect(**temp_config) as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.settings.mysql_database} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+                        logger.info(f"数据库 {self.settings.mysql_database} 创建成功或已存在")
+            except Exception as e:
+                logger.error(f"创建数据库失败: {e}")
+                raise
+            
+            # 创建表结构
+            self._create_tables()
         
-        # 创建表结构
+        # 在线程池中执行同步数据库操作
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, _sync_init)
+    
+    def _create_tables(self):
+        """创建数据库表结构"""
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
                 # 文档表
@@ -93,33 +110,23 @@ class DatabaseManager:
                     CREATE TABLE IF NOT EXISTS chat_history (
                         id BIGINT AUTO_INCREMENT PRIMARY KEY,
                         session_id VARCHAR(255) NOT NULL,
-                        question TEXT NOT NULL,
-                        answer LONGTEXT NOT NULL,
-                        sources JSON,
+                        user_message LONGTEXT,
+                        assistant_message LONGTEXT,
                         metadata JSON,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         INDEX idx_session_id (session_id),
                         INDEX idx_created_at (created_at),
-                        FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE CASCADE
+                        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
                 
-                # 搜索历史表
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS search_history (
-                        id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                        session_id VARCHAR(255),
-                        query TEXT NOT NULL,
-                        results JSON,
-                        result_count INT DEFAULT 0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX idx_session_id (session_id),
-                        INDEX idx_created_at (created_at),
-                        FOREIGN KEY (session_id) REFERENCES sessions (id) ON DELETE SET NULL
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                """)
-                
-                logger.info("MySQL数据库表结构初始化完成")
+                logger.info("数据库表结构创建完成")
+    
+    def _get_connection(self):
+        """获取数据库连接"""
+        return pymysql.connect(**self.connection_config)
+    
+
     
     def save_document(self, doc_data: Dict[str, Any]) -> str:
         """保存文档信息"""
@@ -197,6 +204,12 @@ class DatabaseManager:
                         doc['metadata'] = json.loads(doc['metadata']) if isinstance(doc['metadata'], str) else doc['metadata']
                 
                 return results
+    
+    async def get_all_documents_content_async(self, limit: int = 1000) -> List[Dict[str, Any]]:
+        """异步获取所有文档的完整内容，用于RAG工作流"""
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_all_documents_content, limit)
     
     def delete_document(self, doc_id: str) -> bool:
         """删除文档"""
@@ -407,9 +420,14 @@ class DatabaseManager:
             return False
 
 
-# 全局数据库实例
+# 全局数据库管理器实例
 db_manager = DatabaseManager()
 
 def get_db_manager() -> DatabaseManager:
-    """获取数据库管理器实例"""
+    """获取数据库管理器实例（同步版本，已废弃）"""
+    return db_manager
+
+async def get_db_manager_async() -> DatabaseManager:
+    """异步获取数据库管理器实例"""
+    await db_manager.async_init()
     return db_manager

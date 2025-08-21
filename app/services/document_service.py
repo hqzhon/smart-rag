@@ -34,16 +34,23 @@ class DocumentService:
         os.makedirs(self.upload_dir, exist_ok=True)
         os.makedirs(self.processed_dir, exist_ok=True)
         
-        # 初始化处理器
+        # 初始化轻量级组件
         self.document_processor = DocumentProcessor(self.upload_dir, self.processed_dir)
         self.text_splitter = MedicalTextSplitter(
             enable_semantic=self.settings.enable_semantic_chunking
         )
         
-        # 初始化数据库管理器
-        self.db_manager = DatabaseManager()
+        # 延迟初始化重量级组件
+        self.db_manager = None
         
-        logger.info("文档服务初始化完成")
+        logger.info("文档服务基础初始化完成")
+    
+    async def async_init(self):
+        """异步初始化重量级组件"""
+        logger.info("开始异步初始化文档服务重量级组件...")
+        # 异步初始化数据库管理器
+        self.db_manager = DatabaseManager()
+        logger.info("文档服务异步初始化完成")
     
     def _parse_file_size(self, size_str: str) -> int:
         """解析文件大小字符串"""
@@ -265,10 +272,10 @@ class DocumentService:
         rollback_actions = []
         
         try:
-            from app.storage.database import get_db_manager
+            from app.storage.database import get_db_manager_async
             from app.storage.vector_store import VectorStore
             
-            db = get_db_manager()
+            db = await get_db_manager_async()
             
             # 1. 获取文档信息
             document = db.get_document(document_id)

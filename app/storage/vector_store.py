@@ -6,6 +6,7 @@ import os
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from app.utils.logger import setup_logger
+from app.core.singletons import SingletonMeta
 
 # 加载环境变量
 load_dotenv()
@@ -13,8 +14,8 @@ load_dotenv()
 logger = setup_logger(__name__)
 
 
-class VectorStore:
-    """向量存储接口（异步）"""
+class VectorStore(metaclass=SingletonMeta):
+    """向量存储接口（异步）- 单例模式"""
     
     def __init__(self, embedding_model=None):
         """初始化向量存储
@@ -22,21 +23,43 @@ class VectorStore:
         Args:
             embedding_model: 异步嵌入模型实例
         """
-        if embedding_model is None:
-            from app.embeddings.embeddings import get_embeddings
-            embedding_model = get_embeddings()
-
+        if hasattr(self, '_initialized'):
+            return
+            
         self.embedding_model = embedding_model
         self.persist_directory = os.getenv("CHROMA_DB_DIR", "./data/chroma_db")
         self.collection_name = os.getenv("CHROMA_COLLECTION_NAME", "medical_documents")
         
-        os.makedirs(self.persist_directory, exist_ok=True)
-        
-        # 初始化向量存储
+        # 延迟初始化
         self.db = None
-        self._initialize_db()
+        self.client = None
+        self.collection = None
+        self._initialized = False
         
-        logger.info(f"向量存储初始化完成，目录: {self.persist_directory}")
+        logger.info(f"向量存储基础配置完成，目录: {self.persist_directory}")
+    
+    async def async_init(self):
+        """异步初始化向量存储"""
+        if self._initialized:
+            return
+            
+        if self.embedding_model is None:
+            from app.embeddings.embeddings import get_embeddings
+            self.embedding_model = get_embeddings()
+        
+        import asyncio
+        loop = asyncio.get_event_loop()
+        
+        # 在线程池中执行同步操作
+        await loop.run_in_executor(None, self._create_directories)
+        await loop.run_in_executor(None, self._initialize_db)
+        
+        self._initialized = True
+        logger.info(f"向量存储异步初始化完成，目录: {self.persist_directory}")
+    
+    def _create_directories(self):
+        """创建目录"""
+        os.makedirs(self.persist_directory, exist_ok=True)
     
     def _initialize_db(self):
         """初始化数据库连接"""

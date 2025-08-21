@@ -6,11 +6,12 @@ from typing import List, Optional
 from app.core.config import settings
 from app.workflow.qianwen_client import get_qianwen_client
 from app.utils.logger import setup_logger
+from app.core.singletons import SingletonMeta
 
 logger = setup_logger(__name__)
 
 
-class QianwenEmbeddings:
+class QianwenEmbeddings(metaclass=SingletonMeta):
     """千问嵌入向量模型（异步）"""
     
     def __init__(self, model: Optional[str] = None):
@@ -19,7 +20,11 @@ class QianwenEmbeddings:
         Args:
             model: 模型名称
         """
+        if hasattr(self, '_initialized'):
+            return
+        
         self.model = model or settings.qianwen_embedding_model
+        self._initialized = True
         logger.info(f"千问嵌入向量模型初始化完成: {self.model}")
     
     async def embed_documents(self, texts: List[str]) -> List[List[float]]:
@@ -68,12 +73,6 @@ class QianwenEmbeddings:
             logger.error(f"查询嵌入失败: {str(e)}")
             raise
 
-# 全局单例
-_qianwen_embeddings: Optional[QianwenEmbeddings] = None
-
 def get_embeddings() -> QianwenEmbeddings:
     """获取千问嵌入向量模型实例（单例）"""
-    global _qianwen_embeddings
-    if _qianwen_embeddings is None:
-        _qianwen_embeddings = QianwenEmbeddings()
-    return _qianwen_embeddings
+    return QianwenEmbeddings()

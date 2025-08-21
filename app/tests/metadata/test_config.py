@@ -14,9 +14,9 @@ TEST_CONFIG: Dict[str, Any] = {
     
     # API配置
     "api_host": "localhost",
-    "api_port": 8000,
+    "api_port": 8001,
     "host": "localhost",
-    "port": 8000,
+    "port": 3000,
     
     # 千问API配置
     "qianwen_api_key": os.getenv("QIANWEN_API_KEY", "test-api-key"),
