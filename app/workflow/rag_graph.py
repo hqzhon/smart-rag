@@ -48,10 +48,10 @@ class RAGWorkflow:
             # 2. 检索相关文档
             if len(expanded_queries) > 1:
                 # 多查询检索
-                retrieved_docs = self.retriever.multi_query_retrieve(expanded_queries, top_k=10)
+                retrieved_docs = await self.retriever.multi_query_retrieve(expanded_queries, top_k=10)
             else:
                 # 单查询检索
-                retrieved_docs = self.retriever.adaptive_retrieve(rewritten_query, top_k=10)
+                retrieved_docs = await self.retriever.adaptive_retrieve(rewritten_query, top_k=10)
             
             if not retrieved_docs:
                 return {
@@ -62,7 +62,7 @@ class RAGWorkflow:
                 }
             
             # 3. 重排序
-            reranked_docs = self.reranker.rerank(query, retrieved_docs, top_k=5)
+            reranked_docs = await self.reranker.rerank_documents(query, retrieved_docs, top_k=5)
             
             # 4. 构建上下文
             context = self._build_context(reranked_docs)

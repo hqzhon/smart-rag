@@ -50,6 +50,7 @@ class EnhancedRAGWorkflow:
                     top_k=10, 
                     use_metadata_filter=use_metadata_retrieval
                 )
+            logger.info(f"Retrieved docs: {retrieved_docs}")
             
             if not retrieved_docs:
                 return {
@@ -65,10 +66,13 @@ class EnhancedRAGWorkflow:
                 }
             
             reranked_docs = await self.reranker.rerank_documents(query, retrieved_docs, top_k=5)
+            logger.info(f"Reranked docs: {reranked_docs}")
             
             context = self._build_context(reranked_docs)
+            logger.info(f"Context: {context}")
             
             response = await self._deepseek_generate_response(query, context)
+            logger.info(f"Response from deepseek: {response}")
             
             final_response = self._post_process_response(response)
             
