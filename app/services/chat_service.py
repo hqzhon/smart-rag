@@ -338,6 +338,117 @@ class ChatService:
     
 
     
+    async def delete_session(self, session_id: str) -> bool:
+        """删除会话
+        
+        Args:
+            session_id: 会话ID
+            
+        Returns:
+            删除是否成功
+        """
+        try:
+            # 从数据库删除会话
+            from app.storage.database import get_db_manager
+            db = get_db_manager()
+            
+            # 软删除：将is_active设为0
+            success = db.delete_session(session_id)
+            
+            if success:
+                # 从内存中清理会话
+                self.session_manager.remove_session(session_id)
+                logger.info(f"会话删除成功: {session_id}")
+                return True
+            else:
+                logger.warning(f"会话删除失败，会话可能不存在: {session_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"删除会话失败: {str(e)}")
+            return False
+    
+    async def update_session(self, session_id: str, title: str = None, metadata: dict = None) -> bool:
+        """更新会话信息
+        
+        Args:
+            session_id: 会话ID
+            title: 新标题
+            metadata: 新元数据
+            
+        Returns:
+            更新是否成功
+        """
+        try:
+            # 更新数据库中的会话信息
+            from app.storage.database import get_db_manager
+            db = get_db_manager()
+            
+            update_data = {}
+            if title is not None:
+                update_data['title'] = title
+            if metadata is not None:
+                update_data['metadata'] = metadata
+                
+            if not update_data:
+                logger.warning(f"没有提供更新数据: {session_id}")
+                return False
+                
+            success = db.update_session(session_id, update_data)
+            
+            if success:
+                logger.info(f"会话更新成功: {session_id}")
+                return True
+            else:
+                logger.warning(f"会话更新失败，会话可能不存在: {session_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"更新会话失败: {str(e)}")
+            return False
+    
+    async def get_sessions(self, page: int = 1, page_size: int = 10) -> dict:
+        """获取会话列表
+        
+        Args:
+            page: 页码
+            page_size: 每页数量
+            
+        Returns:
+            包含会话列表和分页信息的字典
+        """
+        try:
+            # 从数据库获取会话列表
+            from app.storage.database import get_db_manager
+            db = get_db_manager()
+            
+            result = db.get_sessions(page=page, page_size=page_size)
+            sessions = result.get('sessions', [])
+            
+            # 转换为前端需要的格式
+            formatted_sessions = []
+            for session in sessions:
+                formatted_session = {
+                    'id': session.get('session_id', ''),
+                    'title': session.get('title', '新对话'),
+                    'updated_at': session.get('updated_at', ''),
+                    'created_at': session.get('created_at', ''),
+                    'message_count': session.get('message_count', 0)
+                }
+                formatted_sessions.append(formatted_session)
+            
+            logger.info(f"获取会话列表成功，共 {len(formatted_sessions)} 个会话，总计 {result.get('total', 0)} 个")
+            return {
+                'sessions': formatted_sessions,
+                'total': result.get('total', 0),
+                'page': result.get('page', page),
+                'page_size': result.get('page_size', page_size)
+            }
+            
+        except Exception as e:
+            logger.error(f"获取会话列表失败: {str(e)}")
+            return {'sessions': [], 'total': 0, 'page': page, 'page_size': page_size}
+    
     async def cleanup_expired_sessions(self):
         """清理过期会话"""
         try:

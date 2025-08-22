@@ -10,6 +10,7 @@ import { AnimatedBox, HoverAnimatedBox } from '@/components/animations';
 import ChatPage from '@/pages/ChatPage';
 import TestUpload from '@/pages/TestUpload';
 import FileManagementPage from '@/pages/FileManagementPage';
+import HistoryPage from '@/pages/HistoryPage';
 import Navigation from '@/components/Navigation';
 import { useChatStore } from '@/stores/chatStore';
 import { createAppTheme } from './theme';
@@ -40,6 +41,7 @@ const AnimatedRoutes: React.FC = () => {
             <Route path="/" element={<FileManagementPage />} />
             <Route path="/files" element={<FileManagementPage />} />
             <Route path="/chat/:sessionId?" element={<ChatPage />} />
+            <Route path="/history" element={<HistoryPage />} />
             <Route path="/test-upload" element={<TestUpload />} />
           </Routes>
         </Box>

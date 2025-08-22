@@ -43,7 +43,10 @@ export interface ChatHistoryItem {
   question: string;
   answer: string;
   timestamp: string;
+  created_at?: string;
   session_id: string;
+  sources?: DocumentSource[];
+  metadata?: Record<string, any>;
 }
 
 // 会话信息类型
@@ -115,14 +118,7 @@ export interface ApiResponse<T = any> {
   error?: string;
 }
 
-// 聊天历史项类型
-export interface ChatHistoryItem {
-  id: string;
-  question: string;
-  answer: string;
-  timestamp: string;
-  session_id: string;
-}
+
 
 // 会话信息类型
 export interface SessionInfo {

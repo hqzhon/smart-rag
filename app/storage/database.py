@@ -112,6 +112,9 @@ class DatabaseManager(metaclass=SingletonMeta):
                         session_id VARCHAR(255) NOT NULL,
                         user_message LONGTEXT,
                         assistant_message LONGTEXT,
+                        question LONGTEXT,
+                        answer LONGTEXT,
+                        sources JSON,
                         metadata JSON,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         INDEX idx_session_id (session_id),
@@ -119,6 +122,28 @@ class DatabaseManager(metaclass=SingletonMeta):
                         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
+                
+                # 添加新字段（如果不存在）
+                try:
+                    cursor.execute("ALTER TABLE chat_history ADD COLUMN question LONGTEXT")
+                    logger.info("添加question字段成功")
+                except pymysql.Error as e:
+                    if "Duplicate column name" not in str(e):
+                        logger.warning(f"添加question字段失败: {e}")
+                
+                try:
+                    cursor.execute("ALTER TABLE chat_history ADD COLUMN answer LONGTEXT")
+                    logger.info("添加answer字段成功")
+                except pymysql.Error as e:
+                    if "Duplicate column name" not in str(e):
+                        logger.warning(f"添加answer字段失败: {e}")
+                
+                try:
+                    cursor.execute("ALTER TABLE chat_history ADD COLUMN sources JSON")
+                    logger.info("添加sources字段成功")
+                except pymysql.Error as e:
+                    if "Duplicate column name" not in str(e):
+                        logger.warning(f"添加sources字段失败: {e}")
                 
                 logger.info("数据库表结构创建完成")
     
@@ -407,6 +432,129 @@ class DatabaseManager(metaclass=SingletonMeta):
                     history.append(row)
                 
                 return history
+    
+    def delete_session(self, session_id: str) -> bool:
+        """删除会话（软删除）"""
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE sessions 
+                        SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s AND is_active = 1
+                    """, (session_id,))
+                    conn.commit()
+                    
+                    # 检查是否有行被更新
+                    return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"删除会话失败: {e}")
+            return False
+    
+    def update_session(self, session_id: str, update_data: Dict[str, Any]) -> bool:
+        """更新会话信息"""
+        try:
+            if not update_data:
+                return False
+                
+            # 构建更新字段
+            set_clauses = []
+            values = []
+            
+            for key, value in update_data.items():
+                if key in ['title', 'metadata']:
+                    set_clauses.append(f"{key} = %s")
+                    if key == 'metadata':
+                        values.append(json.dumps(value, ensure_ascii=False))
+                    else:
+                        values.append(value)
+            
+            if not set_clauses:
+                return False
+                
+            # 添加updated_at字段
+            set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+            values.append(session_id)
+            
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    query = f"""
+                        UPDATE sessions 
+                        SET {', '.join(set_clauses)}
+                        WHERE id = %s AND is_active = 1
+                    """
+                    cursor.execute(query, values)
+                    conn.commit()
+                    
+                    # 检查是否有行被更新
+                    return cursor.rowcount > 0
+        except Exception as e:
+            logger.error(f"更新会话失败: {e}")
+            return False
+    
+    def get_sessions(self, page: int = 1, page_size: int = 10) -> Dict[str, Any]:
+        """获取会话列表
+        
+        Args:
+            page: 页码
+            page_size: 每页数量
+            
+        Returns:
+            包含会话列表和总数的字典
+        """
+        try:
+            offset = (page - 1) * page_size
+            
+            with self._get_connection() as conn:
+                with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                    # 首先获取总数
+                    cursor.execute("""
+                        SELECT COUNT(*) as total
+                        FROM (
+                            SELECT s.id
+                            FROM sessions s
+                            LEFT JOIN chat_history ch ON s.id = ch.session_id
+                            WHERE s.is_active = 1
+                            GROUP BY s.id
+                            HAVING COUNT(ch.id) > 0
+                        ) as filtered_sessions
+                    """)
+                    total_count = cursor.fetchone()['total']
+                    
+                    # 获取会话列表，包含消息数量统计，过滤掉空会话
+                    cursor.execute("""
+                        SELECT 
+                            s.id as session_id,
+                            s.title,
+                            s.created_at,
+                            s.updated_at,
+                            s.metadata,
+                            COUNT(ch.id) as message_count
+                        FROM sessions s
+                        LEFT JOIN chat_history ch ON s.id = ch.session_id
+                        WHERE s.is_active = 1
+                        GROUP BY s.id, s.title, s.created_at, s.updated_at, s.metadata
+                        HAVING COUNT(ch.id) > 0
+                        ORDER BY s.updated_at DESC
+                        LIMIT %s OFFSET %s
+                    """, (page_size, offset))
+                    
+                    sessions = []
+                    for row in cursor.fetchall():
+                        if row['metadata']:
+                            row['metadata'] = json.loads(row['metadata']) if isinstance(row['metadata'], str) else row['metadata']
+                        sessions.append(row)
+                    
+                    return {
+                        'sessions': sessions,
+                        'total': total_count,
+                        'page': page,
+                        'page_size': page_size
+                    }
+                    
+        except Exception as e:
+            logger.error(f"获取会话列表失败: {e}")
+            return {'sessions': [], 'total': 0, 'page': page, 'page_size': page_size}
     
     def health_check(self) -> bool:
         """健康检查"""

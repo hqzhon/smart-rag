@@ -219,7 +219,8 @@ const OptimizedMessageItem: React.FC<OptimizedMessageItemProps> = memo(
       // 按document_id分组合并相同文档的引用
       const groupedSources = message.sources.reduce((groups: any, source: DocumentSource) => {
         const documentId = source.metadata?.document_id || 'unknown';
-        const sourceTitle = source.metadata?.filename || 
+        const sourceTitle = (source as any).filename || 
+                           source.metadata?.filename || 
                            source.metadata?.source || 
                            '未知文档';
         const pageNumber = source.metadata?.page_number;

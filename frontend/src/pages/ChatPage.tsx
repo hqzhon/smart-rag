@@ -25,6 +25,8 @@ const ChatPage: React.FC = () => {
     setCurrentSession,
     createSession,
     loadChatHistory,
+    loadSessions,
+    sessions,
     error,
     setError,
   } = useChatStore();
@@ -35,8 +37,24 @@ const ChatPage: React.FC = () => {
     if (sessionId && sessionId !== currentSession) {
       setCurrentSession(sessionId);
       loadChatHistory(sessionId);
+    } else if (!sessionId && !currentSession && sessions.length > 0) {
+      // 当没有sessionId参数且没有当前会话时，选择最新的会话作为默认会话
+      const latestSession = sessions.sort((a, b) => 
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )[0];
+      if (latestSession) {
+        setCurrentSession(latestSession.id);
+        loadChatHistory(latestSession.id);
+        // 更新URL以反映当前选中的会话
+        window.history.replaceState(null, '', `/chat/${latestSession.id}`);
+      }
     }
-  }, [sessionId, currentSession, setCurrentSession, loadChatHistory]);
+  }, [sessionId, currentSession, setCurrentSession, loadChatHistory, sessions]);
+
+  // 页面初始化时加载会话列表
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
 
   const handleCreateSession = async () => {
     try {

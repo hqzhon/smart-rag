@@ -19,6 +19,7 @@ interface ChatStore extends AppState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   createSession: () => Promise<string>;
+  loadSessions: () => Promise<void>;
   loadChatHistory: (sessionId: string) => Promise<void>;
   sendMessage: (sessionId: string, content: string) => Promise<void>;
   sendStreamMessage: (sessionId: string, content: string) => Promise<void>;
@@ -107,30 +108,71 @@ export const useChatStore = create<ChatStore>()(
         }
       },
 
+      loadSessions: async () => {
+        try {
+          set({ isLoading: true, error: null });
+          
+          const response = await chatApi.getChatSessions(1, 50); // 获取更多会话
+          
+          if (response && response.sessions) {
+            const sessions: ChatSession[] = response.sessions
+              .map((item: any) => ({
+                id: item.id,
+                title: item.title || '未命名对话',
+                createdAt: new Date(item.created_at),
+                updatedAt: new Date(item.updated_at),
+                messageCount: item.message_count || 0,
+              }));
+            
+            set({ sessions, isLoading: false });
+          } else {
+            set({ sessions: [], isLoading: false });
+          }
+        } catch (error) {
+          console.error('加载会话列表失败:', error);
+          set({ 
+            error: error instanceof Error ? error.message : '加载会话列表失败',
+            isLoading: false,
+            sessions: []
+          });
+        }
+      },
+
       loadChatHistory: async (sessionId) => {
         try {
           set({ isLoading: true, error: null });
           
           const history = await chatApi.getChatHistory(sessionId);
-          const messages: Message[] = history.map((item: ChatHistoryItem) => ({
-            id: item.id || generateUniqueId('user'),
-            type: 'user' as const,
-            content: item.question || '',
-            timestamp: new Date(item.timestamp || Date.now()),
-          }));
-
-          // 添加助手回复
-          history.forEach((item: ChatHistoryItem) => {
+          const messages: Message[] = [];
+          
+          // 按时间顺序处理每个历史记录项
+          history.forEach((item: ChatHistoryItem, index: number) => {
+            const baseTimestamp = new Date(item.created_at || item.timestamp || Date.now());
+            
+            // 添加用户消息
+            if (item.question) {
+              messages.push({
+                id: item.id ? `${item.id}-user` : generateUniqueId('user'),
+                type: 'user' as const,
+                content: item.question,
+                timestamp: new Date(baseTimestamp.getTime() + index * 1000), // 确保时间递增
+              });
+            }
+            
+            // 添加助手回复
             if (item.answer) {
               messages.push({
                 id: item.id ? `${item.id}-assistant` : generateUniqueId('assistant'),
                 type: 'assistant' as const,
                 content: item.answer,
-                timestamp: new Date(item.timestamp || Date.now()),
-                sources: [],
+                timestamp: new Date(baseTimestamp.getTime() + index * 1000 + 500), // 助手回复稍晚于用户消息
+                sources: item.sources || [],
               });
             }
           });
+          
+          // 按时间戳排序确保正确顺序
+          messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
           set((state) => ({
             messages: { ...state.messages, [sessionId]: messages },

@@ -203,7 +203,7 @@ const MessageItem: React.FC<MessageItemProps> = ({ index, style, data }) => {
               {msg.sources.map((source, idx) => {
                 const sourceTitle = typeof source === 'string' 
                   ? source 
-                  : source?.metadata?.title || source?.metadata?.source || '未知文档';
+                  : (source as any)?.filename || source?.metadata?.filename || source?.metadata?.source || '未知文档';
                 
                 return (
                   <AnimatedBox key={idx} animation="fadeInUp" delay={`${0.1 * idx}s`}>

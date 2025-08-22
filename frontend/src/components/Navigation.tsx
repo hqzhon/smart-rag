@@ -11,6 +11,7 @@ import {
   Chat as ChatIcon,
   Folder as FolderIcon,
   SmartToy as BotIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -87,6 +88,24 @@ const Navigation: React.FC = () => {
               }}
             >
               智能问答
+            </Button>
+            
+            <Button
+              color="inherit"
+              startIcon={<HistoryIcon />}
+              onClick={() => navigate('/history')}
+              sx={{
+                color: 'white',
+                fontWeight: isActive('/history') ? 700 : 400,
+                backgroundColor: isActive('/history') ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                },
+                borderRadius: 2,
+                px: 2,
+              }}
+            >
+              历史记录
             </Button>
           </Box>
         </Toolbar>

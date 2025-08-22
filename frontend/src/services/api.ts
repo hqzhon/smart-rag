@@ -157,10 +157,27 @@ export const chatApi = {
     return response.data;
   },
 
+  // 获取会话列表
+  getChatSessions: async (page: number = 1, pageSize: number = 20): Promise<any> => {
+    const response = await apiClient.get(`/chat/sessions?page=${page}&page_size=${pageSize}`);
+    return response.data;
+  },
+
   // 获取聊天历史
   getChatHistory: async (sessionId: string, limit = 50): Promise<ChatHistoryItem[]> => {
     const response = await apiClient.get(`/chat/history/${sessionId}?limit=${limit}`);
     return response.data;
+  },
+
+  // 删除会话
+  deleteSession: async (sessionId: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const response = await apiClient.delete(`/chat/sessions/${sessionId}`);
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      console.error('Delete session error:', error);
+      return { success: false, message: 'Failed to delete session' };
+    }
   },
 };
 

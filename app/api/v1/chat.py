@@ -117,6 +117,43 @@ async def get_session(session_id: str):
     return session_info
 
 
+@router.get("/chat/history/{session_id}")
+async def get_chat_history(session_id: str, limit: int = 50):
+    """获取指定会话的聊天历史"""
+    try:
+        from app.services.chat_service import ChatService
+        
+        chat_service = ChatService()
+        history = await chat_service.get_chat_history(session_id, limit)
+        
+        logger.info(f"成功获取会话 {session_id} 的聊天历史，共 {len(history)} 条记录")
+        return history
+        
+    except Exception as e:
+        logger.error(f"获取聊天历史失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取聊天历史失败: {str(e)}")
+
+
+@router.get("/chat/sessions")
+async def get_sessions(page: int = 1, page_size: int = 10):
+    """获取会话列表"""
+    try:
+        from app.services.chat_service import ChatService
+        
+        chat_service = ChatService()
+        result = await chat_service.get_sessions(page=page, page_size=page_size)
+        
+        return {
+            "sessions": result.get('sessions', []),
+            "total": result.get('total', 0),
+            "page": result.get('page', page),
+            "page_size": result.get('page_size', page_size)
+        }
+    except Exception as e:
+        logger.error(f"获取会话列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="获取会话列表失败")
+
+
 @router.post("/chat/sessions")
 async def create_session():
     """创建新会话，自动关联所有可用文档"""
@@ -196,3 +233,51 @@ async def refresh_global_rag_workflow():
     global _global_rag_workflow
     _global_rag_workflow = None
     logger.info("全局RAG工作流已重置，下次查询时将重新初始化")
+
+
+@router.delete("/chat/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """删除会话"""
+    try:
+        from app.services.chat_service import ChatService
+        
+        chat_service = ChatService()
+        success = await chat_service.delete_session(session_id)
+        
+        if success:
+            return {"message": "会话删除成功"}
+        else:
+            raise HTTPException(status_code=404, detail="会话不存在或已被删除")
+            
+    except Exception as e:
+        logger.error(f"删除会话失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="删除会话失败")
+
+
+@router.put("/chat/sessions/{session_id}")
+async def update_session(session_id: str, update_data: dict):
+    """更新会话信息"""
+    try:
+        from app.services.chat_service import ChatService
+        
+        chat_service = ChatService()
+        
+        # 提取标题和元数据
+        title = update_data.get('title')
+        metadata = update_data.get('metadata')
+        
+        if not title and not metadata:
+            raise HTTPException(status_code=400, detail="请提供要更新的标题或元数据")
+        
+        success = await chat_service.update_session(session_id, title=title, metadata=metadata)
+        
+        if success:
+            return {"message": "会话更新成功"}
+        else:
+            raise HTTPException(status_code=404, detail="会话不存在")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"更新会话失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="更新会话失败")
