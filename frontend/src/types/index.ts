@@ -172,13 +172,18 @@ export interface DocumentInfo {
   size: number;
   uploadTime: string;
   type: string;
-  // 兼容旧字段
+  progress?: number;
   document_id?: string;
   session_id?: string;
   filename?: string;
-  status?: 'processing' | 'completed' | 'error' | 'uploaded';
+  status?: 'processing' | 'completed' | 'error' | 'uploaded' | 'vectorizing' | 'generating_metadata' | 'chat_ready';
   chunks?: number;
   message?: string;
+  // 新增详细状态字段
+  processing_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  vectorization_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  metadata_generation_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  chat_ready?: boolean;
 }
 
 

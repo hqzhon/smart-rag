@@ -20,6 +20,12 @@ class Document(BaseModel):
     vectorized: bool = False  # 向量化状态
     vectorization_status: str = "pending"  # pending, processing, completed, failed
     vectorization_time: Optional[datetime] = None  # 向量化完成时间
+    # 新增关键字和摘要生成状态
+    metadata_generated: bool = False  # 元数据生成状态
+    metadata_generation_status: str = "pending"  # pending, processing, completed, failed
+    metadata_generation_time: Optional[datetime] = None  # 元数据生成完成时间
+    # 聊天交互就绪状态（当所有处理完成后设置为True）
+    chat_ready: bool = False  # 是否已具备聊天交互功能
     error_message: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 

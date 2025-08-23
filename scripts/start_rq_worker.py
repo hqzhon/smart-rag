@@ -63,8 +63,13 @@ def signal_handler(signum, frame):
 def start_worker_process(worker_id: int, redis_host: str, redis_port: int):
     """启动单个工作进程"""
     try:
-        # Setup Redis connection
-        redis_conn = Redis(host=redis_host, port=redis_port, decode_responses=True)
+        # Setup Redis connection for RQ compatibility
+        redis_conn = Redis(
+            host=redis_host, 
+            port=redis_port, 
+            decode_responses=False,
+            encoding='utf-8'
+        )
         
         # Create queue
         queue = Queue('metadata_queue', connection=redis_conn)
@@ -109,7 +114,13 @@ def main():
     
     # Test Redis connection
     try:
-        redis_conn = Redis(host=redis_host, port=redis_port, decode_responses=True)
+        redis_conn = Redis(
+            host=redis_host, 
+            port=redis_port, 
+            decode_responses=True,
+            encoding='utf-8',
+            encoding_errors='ignore'
+        )
         redis_conn.ping()
         logger.info("Redis 连接测试成功")
     except Exception as e:

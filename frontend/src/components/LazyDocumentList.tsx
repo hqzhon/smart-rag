@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   Box,
-
+  Chip,
   ListItem,
   ListItemText,
   ListItemIcon,
@@ -15,6 +15,13 @@ import {
   Description as DocumentIcon,
   Delete as DeleteIcon,
   Visibility as ViewIcon,
+  CheckCircle as CompletedIcon,
+  Sync as ProcessingIcon,
+  Error as ErrorIcon,
+  CloudUpload as UploadedIcon,
+  Transform as VectorizeIcon,
+  Psychology as MetadataIcon,
+  Chat as ChatReadyIcon,
 } from '@mui/icons-material';
 import { FixedSizeList as VirtualList } from 'react-window';
 // @ts-ignore
@@ -51,6 +58,46 @@ interface DocumentItemProps {
 const DocumentItem: React.FC<DocumentItemProps> = ({ index, style, data }) => {
   const { documents, onDelete, onView } = data;
   const document = documents[index];
+
+  // 获取文档状态显示信息
+  const getStatusInfo = (doc: Document) => {
+    // 优先使用详细状态字段
+    if (doc.chat_ready) {
+      return { label: '可聊天', color: 'success' as const, icon: <ChatReadyIcon /> };
+    }
+    
+    if (doc.metadata_generation_status === 'processing') {
+      return { label: '生成摘要中', color: 'info' as const, icon: <MetadataIcon /> };
+    }
+    
+    if (doc.vectorization_status === 'processing') {
+      return { label: '向量化中', color: 'info' as const, icon: <ProcessingIcon /> };
+    }
+    
+    if (doc.processing_status === 'processing') {
+      return { label: '处理中', color: 'info' as const, icon: <ProcessingIcon /> };
+    }
+    
+    // 回退到简单状态字段
+    switch (doc.status) {
+      case 'chat_ready':
+        return { label: '可聊天', color: 'success' as const, icon: <ChatReadyIcon /> };
+      case 'generating_metadata':
+        return { label: '生成摘要中', color: 'info' as const, icon: <MetadataIcon /> };
+      case 'vectorizing':
+        return { label: '向量化中', color: 'info' as const, icon: <ProcessingIcon /> };
+      case 'processing':
+        return { label: '处理中', color: 'info' as const, icon: <ProcessingIcon /> };
+      case 'completed':
+        return { label: '已完成', color: 'success' as const, icon: <CompletedIcon /> };
+      case 'uploaded':
+        return { label: '已上传', color: 'primary' as const, icon: <UploadedIcon /> };
+      case 'error':
+        return { label: '错误', color: 'error' as const, icon: <ErrorIcon /> };
+      default:
+        return { label: '未知', color: 'default' as const, icon: <ProcessingIcon /> };
+    }
+  };
 
   // 如果文档不存在（正在加载），显示骨架屏
   if (!document) {
@@ -124,17 +171,24 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ index, style, data }) => {
                 </Typography>
               }
               secondary={
-                <React.Fragment>
-                  <Typography variant="caption" color="text.secondary" component="span" sx={{ mr: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="caption" color="text.secondary" component="span">
                     {formatFileSize(document.size)}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" component="span" sx={{ mr: 2 }}>
+                  <Typography variant="caption" color="text.secondary" component="span">
                     {formatDate(document.uploadTime)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" component="span">
                     {document.type.toUpperCase()}
                   </Typography>
-                </React.Fragment>
+                  <Chip
+                    size="small"
+                    label={getStatusInfo(document).label}
+                    color={getStatusInfo(document).color}
+                    icon={getStatusInfo(document).icon}
+                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  />
+                </Box>
               }
             />
             <ListItemSecondaryAction>

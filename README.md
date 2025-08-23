@@ -63,6 +63,7 @@ cp .env.example .env
 
 ```bash
 python run.py
+python scripts/start_rq_worker.py  # 队列
 ```
 
 后端API将在 http://localhost:8001 启动

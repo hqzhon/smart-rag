@@ -16,6 +16,14 @@ from app.services.document_service import DocumentService
 
 logger = setup_logger(__name__)
 
+# 获取全局服务实例
+def get_document_service():
+    """获取全局文档服务实例"""
+    from app.main import document_service
+    if document_service is None:
+        raise HTTPException(status_code=500, detail="文档服务未初始化")
+    return document_service
+
 router = APIRouter()
 
 
@@ -36,9 +44,12 @@ async def upload_document(
     from app.services.chat_service import ChatService
     
     try:
-        # 初始化服务
-        document_service = DocumentService()
-        chat_service = ChatService()
+        # 获取全局服务实例
+        document_service = get_document_service()
+        from app.main import chat_service as global_chat_service
+        if global_chat_service is None:
+            raise HTTPException(status_code=500, detail="聊天服务未初始化")
+        chat_service = global_chat_service
         
         # 读取文件内容
         file_content = await file.read()
@@ -114,22 +125,27 @@ async def get_documents():
 @router.get("/documents/{document_id}")
 async def get_document(document_id: str):
     """获取文档信息"""
-    # 获取文档信息
-    from app.storage.database import get_db_manager
-    db = get_db_manager()
-    
-    document = db.get_document(document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="文档不存在")
-    
-    return {
-        "document_id": document_id,
-        "title": document["title"],
-        "file_type": document["file_type"],
-        "file_size": document["file_size"],
-        "created_at": document["created_at"],
-        "status": "active"
-    }
+    try:
+        document_service = get_document_service()
+        # 获取文档信息
+        from app.storage.database import get_db_manager
+        db = get_db_manager()
+        
+        document = db.get_document(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        
+        return {
+            "document_id": document_id,
+            "title": document["title"],
+            "file_type": document["file_type"],
+            "file_size": document["file_size"],
+            "created_at": document["created_at"],
+            "status": "active"
+        }
+    except Exception as e:
+        logger.error(f"获取文档失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取文档失败: {str(e)}")
 
 
 @router.post("/documents/vectorize")
@@ -137,10 +153,7 @@ async def vectorize_documents():
     """触发增量向量化更新"""
     try:
         # 获取文档服务实例
-        from app.main import document_service
-        
-        if not document_service:
-            raise HTTPException(status_code=500, detail="文档服务未初始化")
+        document_service = get_document_service()
         
         # 执行增量向量化
         updated_count = await document_service.update_vectorization_for_new_documents()
@@ -159,23 +172,25 @@ async def vectorize_documents():
 @router.delete("/documents/{document_id}")
 async def delete_document(document_id: str):
     """删除文档"""
-    # 实现文档删除
-    from app.services.document_service import DocumentService
-    
-    document_service = DocumentService()
-    success = await document_service.delete_document(document_id)
-    
-    if not success:
-        raise HTTPException(status_code=404, detail="文档不存在或删除失败")
-    
-    return {"document_id": document_id, "status": "deleted", "message": "文档删除成功"}
+    try:
+        # 实现文档删除
+        document_service = get_document_service()
+        success = await document_service.delete_document(document_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="文档不存在或删除失败")
+        
+        return {"document_id": document_id, "status": "deleted", "message": "文档删除成功"}
+    except Exception as e:
+        logger.error(f"删除文档失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"删除文档失败: {str(e)}")
 
 
 @router.get("/documents/chunking/stats")
 async def get_chunking_stats():
     """获取智能分块统计信息"""
     try:
-        document_service = DocumentService()
+        document_service = get_document_service()
         stats = document_service.get_chunking_stats()
         
         return {
@@ -192,7 +207,7 @@ async def get_chunking_stats():
 async def reset_chunking_stats():
     """重置智能分块统计"""
     try:
-        document_service = DocumentService()
+        document_service = get_document_service()
         success = document_service.reset_chunking_stats()
         
         if not success:
@@ -219,7 +234,7 @@ class ChunkingConfigUpdate(BaseModel):
 async def update_chunking_config(config: ChunkingConfigUpdate):
     """更新智能分块配置"""
     try:
-        document_service = DocumentService()
+        document_service = get_document_service()
         
         # 过滤掉None值
         config_dict = {k: v for k, v in config.dict().items() if v is not None}

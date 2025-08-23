@@ -101,6 +101,33 @@ class DocumentService:
                 processing_status="uploaded"
             )
             
+            # 立即保存基础文档信息到MySQL数据库
+            try:
+                doc_data = {
+                    'id': document_id,
+                    'title': filename,
+                    'content': '',  # 上传时内容为空，处理后再更新
+                    'file_path': file_path,
+                    'file_size': len(file_content),
+                    'file_type': content_type,
+                    'metadata': {
+                        'original_filename': filename,
+                        'processing_status': 'uploaded',
+                        'vectorized': False,
+                        'vectorization_status': 'pending'
+                    }
+                }
+                
+                self.db_manager.save_document(doc_data)
+                logger.info(f"基础文档信息已保存到数据库: {document_id}")
+                
+            except Exception as db_error:
+                # 如果数据库保存失败，删除已保存的文件并抛出异常
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                logger.error(f"保存基础文档信息到数据库失败: {str(db_error)}")
+                raise Exception(f"文档上传失败，数据库保存错误: {str(db_error)}")
+            
             logger.info(f"文档上传成功: {filename} -> {document_id}")
             return document
             
@@ -160,35 +187,16 @@ class DocumentService:
             if not document_title or document_title.strip() == '':
                 document_title = document.filename
             
-            # 进行向量化处理，传递文档标题
-            await self._vectorize_document_chunks(document.id, document, chunks, document_title)
-            
             # 计算处理时间
             processing_time = (datetime.now() - start_time).total_seconds()
             
-            # 创建处理结果
-            processing_result = ProcessingResult(
-                document_id=document.id,
-                success=True,
-                total_chunks=len(chunks),
-                processing_time=processing_time,
-                extracted_text_length=len(result.get("standardized_text", result.get("cleaned_text", result.get("raw_text", "")))),
-                tables_count=len(result.get("tables", [])),
-                references_count=len(result.get("references", [])),
-                images_count=len(result.get("images", []))
-            )
+            # 获取文档内容
+            content = result.get('standardized_text', result.get('cleaned_text', result.get('raw_text', '')))
+            logger.info(f"准备保存文档内容，长度: {len(content)}")
             
-            # 更新文档状态
-            document.processed = True
-            document.processing_status = "completed"
-            
-            # 保存文档信息到数据库
+            # 使用数据库事务确保向量化和MySQL更新的原子性
             try:
-                # 获取文档内容
-                content = result.get('standardized_text', result.get('cleaned_text', result.get('raw_text', '')))
-                logger.info(f"准备保存文档内容，长度: {len(content)}")
-                
-                # 直接使用原始文件名，不再提取标题
+                # 开始事务：先更新数据库，再进行向量化
                 doc_data = {
                     'id': document.id,
                     'title': document.filename,  # 使用原始文件名
@@ -203,16 +211,78 @@ class DocumentService:
                         'tables_count': len(result.get('tables', [])),
                         'references_count': len(result.get('references', [])),
                         'images_count': len(result.get('images', [])),
-                        'vectorized': True,  # 移到metadata中
-                        'vectorization_status': 'completed'
+                        'processing_status': 'completed',
+                        'vectorized': False,  # 先标记为未向量化
+                        'vectorization_status': 'processing'
                     }
                 }
                 
+                # 更新数据库中的文档信息（包含处理后的内容）
                 self.db_manager.save_document(doc_data)
-                logger.info(f"文档信息已保存到数据库: {document.id}")
-            except Exception as db_error:
-                logger.error(f"保存文档到数据库失败: {str(db_error)}")
-                # 不影响主流程，继续返回处理结果
+                logger.info(f"文档内容已更新到数据库: {document.id}")
+                
+                # 进行向量化处理
+                await self._vectorize_document_chunks(document.id, document, chunks, document_title)
+                logger.info(f"文档向量化完成: {document.id}")
+                
+                # 向量化成功后，更新向量化状态
+                vectorization_update = {
+                    'vectorized': True,
+                    'vectorization_status': 'completed',
+                    'vectorization_time': datetime.now()
+                }
+                
+                # 更新元数据中的向量化状态
+                doc_data['metadata'].update({
+                    'vectorized': True,
+                    'vectorization_status': 'completed'
+                })
+                
+                self.db_manager.update_document(document.id, {
+                    'vectorized': True,
+                    'vectorization_status': 'completed',
+                    'metadata': doc_data['metadata']
+                })
+                
+                logger.info(f"文档处理和向量化事务完成: {document.id}")
+                
+            except Exception as transaction_error:
+                logger.error(f"文档处理事务失败: {str(transaction_error)}")
+                
+                # 回滚：更新数据库状态为失败
+                try:
+                    self.db_manager.update_document(document.id, {
+                        'vectorized': False,
+                        'vectorization_status': 'failed',
+                        'metadata': {
+                            'processing_status': 'failed',
+                            'error_message': str(transaction_error),
+                            'vectorized': False,
+                            'vectorization_status': 'failed'
+                        }
+                    })
+                    logger.info(f"文档状态已回滚为失败: {document.id}")
+                except Exception as rollback_error:
+                    logger.error(f"状态回滚失败: {str(rollback_error)}")
+                
+                # 重新抛出异常
+                raise transaction_error
+            
+            # 更新文档状态
+            document.processed = True
+            document.processing_status = "completed"
+            
+            # 创建处理结果
+            processing_result = ProcessingResult(
+                document_id=document.id,
+                success=True,
+                total_chunks=len(chunks),
+                processing_time=processing_time,
+                extracted_text_length=len(content),
+                tables_count=len(result.get("tables", [])),
+                references_count=len(result.get("references", [])),
+                images_count=len(result.get("images", []))
+            )
             
             logger.info(f"文档处理和向量化完成: {document.filename}, 耗时: {processing_time:.2f}秒")
             return processing_result

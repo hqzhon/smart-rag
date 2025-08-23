@@ -16,13 +16,9 @@ def get_metadata_processor() -> AsyncMetadataProcessor:
     global _metadata_processor
     if _metadata_processor is None:
         settings = get_settings()
-        vector_store = VectorStore(
-            collection_name=settings.chroma_collection_name,
-            persist_directory=settings.chroma_persist_directory
-        )
+        vector_store = VectorStore()
         _metadata_processor = AsyncMetadataProcessor(
-            chroma_client=vector_store.client,
-            collection_name=settings.chroma_collection_name
+            chroma_client=vector_store
         )
         logger.info("AsyncMetadataProcessor实例已创建")
     return _metadata_processor
@@ -43,15 +39,15 @@ async def _generate_metadata_async(chunk_id: str, text: str, document_id: str):
     logger.info(f"开始为块 {chunk_id} 计算元数据并更新ChromaDB...")
     
     try:
-        # 调用update_chunk_in_chroma方法实现"先计算后更新"策略
-        await metadata_processor.update_chunk_in_chroma(
-            chunk_id=chunk_id, 
+        # 提交任务到异步处理器进行元数据生成
+        task_id = await metadata_processor.submit_task(
+            chunk_id=chunk_id,
             text=text,
-            document_id=document_id
+            metadata={"document_id": document_id}
         )
-        logger.info(f"块 {chunk_id} 的元数据已成功计算并更新到ChromaDB")
+        logger.info(f"块 {chunk_id} 的元数据生成任务已提交，任务ID: {task_id}")
     except Exception as e:
-        logger.error(f"为块 {chunk_id} 计算元数据或更新ChromaDB时发生错误: {e}", exc_info=True)
+        logger.error(f"为块 {chunk_id} 提交元数据生成任务时发生错误: {e}", exc_info=True)
         raise
 
 def generate_metadata_for_chunk(chunk_id: str, text: str, document_id: str):

@@ -53,22 +53,26 @@ class DeepseekClient:
         
         logger.info(f"Deepseek客户端初始化完成，模型: {self.model}")
     
-    async def __aenter__(self):
-        """异步上下文管理器入口"""
+    async def ensure_session(self):
+        """确保会话可用，如果已关闭则重新创建"""
         if self.session is None or self.session.closed:
+            logger.info("重新创建Deepseek客户端会话")
             self.session = aiohttp.ClientSession(
                 connector=self.connector,
                 headers=self.headers,
                 timeout=self.timeout
             )
+    
+    async def __aenter__(self):
+        """异步上下文管理器入口"""
+        await self.ensure_session()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """异步上下文管理器出口"""
-        if self.session and not self.session.closed:
-            await self.session.close()
-        if self.connector and not self.connector.closed:
-            await self.connector.close()
+        # 不在这里关闭session，因为可能被多个请求共享
+        # session的关闭由cleanup_deepseek_client()负责
+        pass
     
     async def chat_completion(
         self,
@@ -90,8 +94,7 @@ class DeepseekClient:
             url = f"{self.base_url}/chat/completions"
             
             # 确保session已初始化
-            if self.session is None or self.session.closed:
-                await self.__aenter__()
+            await self.ensure_session()
             
             async with self.session.post(url, json=payload) as response:
                     if response.status != 200:
@@ -126,8 +129,7 @@ class DeepseekClient:
             url = f"{self.base_url}/chat/completions"
             
             # 确保session已初始化
-            if self.session is None or self.session.closed:
-                await self.__aenter__()
+            await self.ensure_session()
             
             async with self.session.post(url, json=payload) as response:
                     if response.status != 200:
@@ -238,4 +240,9 @@ async def cleanup_deepseek_client():
     """清理Deepseek客户端"""
     global _deepseek_client
     if _deepseek_client is not None:
+        # 关闭会话和连接器
+        if _deepseek_client.session and not _deepseek_client.session.closed:
+            await _deepseek_client.session.close()
+        if _deepseek_client.connector and not _deepseek_client.connector.closed:
+            await _deepseek_client.connector.close()
         _deepseek_client = None

@@ -51,7 +51,7 @@ interface FileWithStatus {
   // File methods
   originalFile: File;
   // Upload status - matching DocumentInfo status types
-  status: 'processing' | 'completed' | 'error' | 'uploaded';
+  status: 'processing' | 'completed' | 'error' | 'uploaded' | 'vectorizing' | 'generating_metadata' | 'chat_ready';
   progress: number;
   error?: string;
   uploadResponse?: any;
@@ -234,12 +234,18 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         response: file.uploadResponse
       }));
       onUploadSuccess(documentsWithResponse);
-      // 如果是对话框模式且所有文件都上传成功，自动关闭窗口
-      if (dialogMode && successFiles.length === totalFilesToUpload) {
-        setTimeout(() => {
-          handleClose();
-        }, 1000); // 延迟1秒关闭，让用户看到成功状态
-      }
+    }
+    
+    // 检查是否应该自动关闭上传页面
+    // 条件：completed、error状态，或者chat_ready状态（表示文档已具备聊天交互功能）
+    const finishedFiles = updatedFiles.filter((f) => 
+      f.status === 'completed' || f.status === 'error' || f.status === 'chat_ready'
+    );
+    
+    if (dialogMode && finishedFiles.length === totalFilesToUpload) {
+      setTimeout(() => {
+        handleClose();
+      }, 1500); // 延迟1.5秒关闭，让用户看到最终状态
     }
   };
 
