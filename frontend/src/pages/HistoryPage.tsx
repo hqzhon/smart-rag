@@ -15,7 +15,7 @@ import {
   FormControl,
   InputLabel,
   Select,
-  Grid2,
+  Grid,
   Skeleton,
   Alert,
   Divider,
@@ -233,8 +233,8 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
       {/* Search and Filter Bar */}
       <AnimatedBox animation="fadeInUp" duration="0.5s">
         <Box sx={{ mb: 4 }}>
-          <Grid2 container spacing={2} alignItems="center">
-            <Grid2 xs={12} md={8}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid xs={12} md={8}>
               <TextField
                 fullWidth
                 placeholder="搜索对话内容..."
@@ -253,8 +253,8 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
                   },
                 }}
               />
-            </Grid2>
-            <Grid2 xs={12} md={4}>
+            </Grid>
+            <Grid xs={12} md={4}>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <FormControl size="small" sx={{ minWidth: 120 }}>
                   <InputLabel>排序方式</InputLabel>
@@ -277,8 +277,8 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
                   <FilterIcon />
                 </IconButton>
               </Box>
-              </Grid2>
-            </Grid2>
+            </Grid>
+          </Grid>
         </Box>
       </AnimatedBox>
 
