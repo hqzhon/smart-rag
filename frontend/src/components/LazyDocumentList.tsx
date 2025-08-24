@@ -171,24 +171,20 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ index, style, data }) => {
                 </Typography>
               }
               secondary={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  <Typography variant="caption" color="text.secondary" component="span">
-                    {formatFileSize(document.size)}
+                <>
+                  <Typography variant="caption" color="text.secondary" component="div">
+                    {formatFileSize(document.size)} • {formatDate(document.uploadTime)} • {document.type.toUpperCase()}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" component="span">
-                    {formatDate(document.uploadTime)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" component="span">
-                    {document.type.toUpperCase()}
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={getStatusInfo(document).label}
-                    color={getStatusInfo(document).color}
-                    icon={getStatusInfo(document).icon}
-                    sx={{ height: 20, fontSize: '0.7rem' }}
-                  />
-                </Box>
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip
+                      size="small"
+                      label={getStatusInfo(document).label}
+                      color={getStatusInfo(document).color}
+                      icon={getStatusInfo(document).icon}
+                      sx={{ height: 20, fontSize: '0.7rem' }}
+                    />
+                  </Box>
+                </>
               }
             />
             <ListItemSecondaryAction>

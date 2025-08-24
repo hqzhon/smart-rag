@@ -28,6 +28,17 @@ class Document(BaseModel):
     chat_ready: bool = False  # 是否已具备聊天交互功能
     error_message: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    # 多文档格式支持字段
+    file_type: str = "pdf"  # pdf, docx, pptx, xlsx, txt, md
+    file_format: str = "pdf"  # 文件格式标识
+    original_filename: str = ""  # 原始文件名
+    processing_start_time: Optional[datetime] = None  # 处理开始时间
+    processing_end_time: Optional[datetime] = None  # 处理结束时间
+    total_pages: Optional[int] = None  # 总页数（适用于PDF、DOCX、PPTX）
+    total_sheets: Optional[int] = None  # 总工作表数（适用于XLSX）
+    total_slides: Optional[int] = None  # 总幻灯片数（适用于PPTX）
+    element_types: List[str] = Field(default_factory=list)  # 文档中包含的元素类型
 
 
 class DocumentChunk(BaseModel):

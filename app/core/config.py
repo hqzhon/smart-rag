@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     upload_directory: str = Field(env="UPLOAD_DIRECTORY", description="上传目录别名")
     processed_directory: str = Field(env="PROCESSED_DIRECTORY", description="处理后文件目录别名")
     
+    # 多文档处理配置
+    supported_formats: str = Field(env="SUPPORTED_FORMATS", default="pdf,docx,pptx,xlsx,txt,md", description="支持的文档格式(逗号分隔)")
+    processing_timeout: int = Field(env="PROCESSING_TIMEOUT", default=300, description="文档处理超时时间(秒)")
+    unstructured_api_key: Optional[str] = Field(env="UNSTRUCTURED_API_KEY", default=None, description="Unstructured API密钥")
+    max_workers: int = Field(env="MAX_WORKERS", default=4, description="文档处理最大工作线程数")
+    enable_metrics: bool = Field(env="ENABLE_METRICS", default=False, description="启用监控指标")
+    
     # JWT和安全配置
     secret_key: str = Field(env="SECRET_KEY", description="应用密钥")
     jwt_secret_key: str = Field(env="JWT_SECRET_KEY", description="JWT密钥")
@@ -113,6 +120,11 @@ class Settings(BaseSettings):
     def chunking_separators_list(self) -> List[str]:
         """将分块分隔符字符串转换为列表"""
         return [sep.strip() for sep in self.chunking_separators.split(',') if sep.strip()]
+    
+    @property
+    def supported_formats_list(self) -> List[str]:
+        """将支持的文档格式字符串转换为列表"""
+        return [fmt.strip().lower() for fmt in self.supported_formats.split(',') if fmt.strip()]
     
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")

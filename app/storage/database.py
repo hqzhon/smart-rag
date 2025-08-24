@@ -75,7 +75,7 @@ class DatabaseManager(metaclass=SingletonMeta):
                         content LONGTEXT NOT NULL,
                         file_path VARCHAR(1000),
                         file_size BIGINT,
-                        file_type VARCHAR(50),
+                        file_type VARCHAR(200),
                         vectorized BOOLEAN DEFAULT FALSE,
                         vectorization_status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
                         vectorization_time TIMESTAMP NULL,

@@ -187,12 +187,64 @@ export const documentApi = {
   uploadDocument: async (file: File, sessionId?: string): Promise<DocumentInfo> => {
     const formData = new FormData();
     formData.append('file', file);
-
+    if (sessionId) {
+      formData.append('session_id', sessionId);
+    }
     const response = await apiClient.post<DocumentInfo>('/documents/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+
+  // 获取支持的文档格式
+  getSupportedFormats: async (): Promise<{
+    formats: Array<{
+      extension: string;
+      format_name: string;
+      description: string;
+      max_size: number;
+      mime_type: string;
+      features: string[];
+    }>;
+    max_file_size: number;
+    processing_timeout: number;
+    total_formats: number;
+  }> => {
+    const response = await apiClient.get('/documents/supported-formats');
+    return response.data;
+  },
+
+  // 获取文档处理状态
+  getDocumentStatus: async (documentId: string): Promise<{
+    document_id: string;
+    filename: string;
+    file_format: string;
+    processing_status: string;
+    vectorization_status: string;
+    metadata_generation_status: string;
+    processing_start_time?: string;
+    processing_end_time?: string;
+    total_pages?: number;
+    total_sheets?: number;
+    total_slides?: number;
+    element_types?: string[];
+    error_message?: string;
+  }> => {
+    const response = await apiClient.get(`/documents/${documentId}/status`);
+    return response.data;
+  },
+
+  // 验证文件格式
+  validateFileFormat: async (filename: string): Promise<{
+    is_supported: boolean;
+    file_format?: string;
+    max_size_mb?: number;
+    timeout_seconds?: number;
+    error_message?: string;
+  }> => {
+    const response = await apiClient.get(`/documents/formats/validate/${encodeURIComponent(filename)}`);
     return response.data;
   },
 

@@ -75,7 +75,7 @@ def create_tables():
                         content LONGTEXT NOT NULL COMMENT '文档内容',
                         file_path VARCHAR(1000) COMMENT '文件路径',
                         file_size BIGINT COMMENT '文件大小(字节)',
-                        file_type VARCHAR(50) COMMENT '文件类型',
+                        file_type VARCHAR(200) COMMENT '文件类型',
                         vectorized BOOLEAN DEFAULT FALSE COMMENT '是否已向量化',
                         vectorization_status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending' COMMENT '向量化状态',
                         vectorization_time TIMESTAMP NULL COMMENT '向量化时间',

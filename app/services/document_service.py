@@ -12,6 +12,7 @@ from datetime import datetime
 
 from app.models.document_models import Document, ProcessingResult
 from app.processors.document_processor import DocumentProcessor
+from app.services.multi_format_processor import MultiFormatProcessor, ProcessingError
 from app.embeddings.text_splitter import MedicalTextSplitter
 from app.utils.logger import setup_logger
 from app.storage.database import DatabaseManager
@@ -36,6 +37,7 @@ class DocumentService:
         
         # 初始化轻量级组件
         self.document_processor = DocumentProcessor(self.upload_dir, self.processed_dir)
+        self.multi_format_processor = MultiFormatProcessor()
         self.text_splitter = MedicalTextSplitter(
             enable_semantic=self.settings.enable_semantic_chunking
         )
@@ -141,16 +143,18 @@ class DocumentService:
         if len(file_content) > self.max_file_size:
             raise ValueError(f"文件大小超过限制: {len(file_content)} > {self.max_file_size}")
         
-        # 检查文件类型
-        allowed_types = ["application/pdf"]
-        if content_type not in allowed_types:
-            raise ValueError(f"不支持的文件类型: {content_type}")
-        
-        # 检查文件扩展名
-        allowed_extensions = [".pdf"]
+        # 检查文件类型和扩展名
         file_extension = Path(filename).suffix.lower()
-        if file_extension not in allowed_extensions:
-            raise ValueError(f"不支持的文件扩展名: {file_extension}")
+        
+        # 使用MultiFormatProcessor验证文件格式
+        if not self.multi_format_processor.is_supported_format(filename):
+            supported_formats = self.multi_format_processor.get_supported_formats()
+            raise ValueError(f"不支持的文件格式: {file_extension}，支持的格式: {supported_formats}")
+        
+        # 验证MIME类型
+        expected_mime_types = self.multi_format_processor.get_mime_types_for_extension(file_extension)
+        if expected_mime_types and content_type not in expected_mime_types:
+            raise ValueError(f"文件类型不匹配: {content_type}，期望: {expected_mime_types}")
     
     async def process_document(self, document: Document) -> ProcessingResult:
         """处理文档，提取文本、分块并进行向量化
@@ -168,17 +172,26 @@ class DocumentService:
             # 更新处理状态
             document.processing_status = "processing"
             
-            # 处理文档
-            result = await asyncio.get_event_loop().run_in_executor(
-                None, self.document_processor.process_single_document, document.file_path
-            )
+            # 使用MultiFormatProcessor处理文档
+            try:
+                result = await self.multi_format_processor.process_document_async(document.file_path)
+            except ProcessingError as e:
+                logger.error(f"多格式处理器处理失败: {str(e)}")
+                # 回退到原始处理器（仅支持PDF）
+                if document.file_path.lower().endswith('.pdf'):
+                    logger.info("回退到原始PDF处理器")
+                    result = await asyncio.get_event_loop().run_in_executor(
+                        None, self.document_processor.process_single_document, document.file_path
+                    )
+                else:
+                    raise e
             
             # 文本分块 - 转换为text_splitter期望的格式
             document_for_splitting = {
-                "text": result.get("standardized_text", result.get("cleaned_text", result.get("raw_text", ""))),
+                "text": result.get("text", result.get("standardized_text", result.get("cleaned_text", result.get("raw_text", "")))),
                 "filename": document.filename,
-                "tables": result.get("metadata", {}).get("tables", []),
-                "references": result.get("metadata", {}).get("references", [])
+                "tables": result.get("tables", result.get("metadata", {}).get("tables", [])),
+                "references": result.get("references", result.get("metadata", {}).get("references", []))
             }
             chunks = self.text_splitter.split_documents([document_for_splitting])
             
@@ -191,29 +204,44 @@ class DocumentService:
             processing_time = (datetime.now() - start_time).total_seconds()
             
             # 获取文档内容
-            content = result.get('standardized_text', result.get('cleaned_text', result.get('raw_text', '')))
+            content = result.get('text', result.get('standardized_text', result.get('cleaned_text', result.get('raw_text', ''))))
             logger.info(f"准备保存文档内容，长度: {len(content)}")
             
             # 使用数据库事务确保向量化和MySQL更新的原子性
             try:
                 # 开始事务：先更新数据库，再进行向量化
+                # 构建文档数据，包含多格式处理的元数据
+                metadata = result.get('metadata', {})
                 doc_data = {
                     'id': document.id,
-                    'title': document.filename,  # 使用原始文件名
+                    'title': document_title,  # 使用提取的标题
                     'content': content,
                     'file_path': document.file_path,
                     'file_size': document.file_size,
                     'file_type': document.content_type,
+                    'file_format': metadata.get('file_format', Path(document.filename).suffix.lower()),
+                    'original_filename': document.filename,
+                    'total_pages': metadata.get('total_pages', 0),
+                    'total_sheets': metadata.get('total_sheets', 0),
+                    'total_slides': metadata.get('total_slides', 0),
+                    'element_types': metadata.get('element_types', []),
+                    'processing_start_time': start_time,
+                    'processing_end_time': datetime.now(),
                     'metadata': {
-                        'original_filename': document.filename,  # 保存原始文件名
+                        'original_filename': document.filename,
                         'chunks_count': len(chunks),
                         'processing_time': processing_time,
                         'tables_count': len(result.get('tables', [])),
                         'references_count': len(result.get('references', [])),
                         'images_count': len(result.get('images', [])),
                         'processing_status': 'completed',
-                        'vectorized': False,  # 先标记为未向量化
-                        'vectorization_status': 'processing'
+                        'vectorized': False,
+                        'vectorization_status': 'processing',
+                        'file_format': metadata.get('file_format', Path(document.filename).suffix.lower()),
+                        'total_pages': metadata.get('total_pages', 0),
+                        'total_sheets': metadata.get('total_sheets', 0),
+                        'total_slides': metadata.get('total_slides', 0),
+                        'element_types': metadata.get('element_types', [])
                     }
                 }
                 
@@ -468,7 +496,74 @@ class DocumentService:
     
     def get_supported_formats(self) -> List[str]:
         """获取支持的文件格式"""
-        return ["pdf"]
+        return self.multi_format_processor.get_supported_formats()
+    
+    def get_supported_formats_info(self) -> Dict[str, Any]:
+        """获取支持的文件格式详细信息"""
+        formats = self.multi_format_processor.get_supported_formats()
+        
+        # 构建格式信息列表
+        format_info_list = []
+        format_details = {
+            'pdf': {
+                'extension': '.pdf',
+                'mime_type': 'application/pdf',
+                'format_name': 'PDF文档',
+                'description': 'Portable Document Format',
+                'max_size': self.settings.max_file_size,
+                'features': ['text_extraction', 'table_detection', 'image_extraction']
+            },
+            'docx': {
+                'extension': '.docx',
+                'mime_type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'format_name': 'Word文档',
+                'description': 'Microsoft Word Document',
+                'max_size': self.settings.max_file_size,
+                'features': ['text_extraction', 'table_detection', 'style_preservation']
+            },
+            'pptx': {
+                'extension': '.pptx',
+                'mime_type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'format_name': 'PowerPoint演示文稿',
+                'description': 'Microsoft PowerPoint Presentation',
+                'max_size': self.settings.max_file_size,
+                'features': ['text_extraction', 'slide_detection', 'image_extraction']
+            },
+            'xlsx': {
+                'extension': '.xlsx',
+                'mime_type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'format_name': 'Excel电子表格',
+                'description': 'Microsoft Excel Spreadsheet',
+                'max_size': self.settings.max_file_size,
+                'features': ['table_extraction', 'data_analysis', 'formula_detection']
+            },
+            'txt': {
+                'extension': '.txt',
+                'mime_type': 'text/plain',
+                'format_name': '纯文本文件',
+                'description': 'Plain Text File',
+                'max_size': self.settings.max_file_size,
+                'features': ['text_extraction', 'encoding_detection']
+            },
+            'md': {
+                'extension': '.md',
+                'mime_type': 'text/markdown',
+                'format_name': 'Markdown文档',
+                'description': 'Markdown Document',
+                'max_size': self.settings.max_file_size,
+                'features': ['text_extraction', 'structure_preservation', 'link_detection']
+            }
+        }
+        
+        for format_name in formats:
+            if format_name in format_details:
+                format_info_list.append(format_details[format_name])
+        
+        return {
+            'formats': format_info_list,
+            'max_file_size': self.settings.max_file_size,
+            'processing_timeout': getattr(self.settings, 'processing_timeout', 300)
+        }
     
     def get_upload_limits(self) -> Dict[str, Any]:
         """获取上传限制"""

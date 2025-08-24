@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Box,
   Dialog,
@@ -14,7 +14,7 @@ import {
   ListItemSecondaryAction,
   Alert,
   Paper,
-
+  Chip,
   SxProps,
   Theme,
 } from '@mui/material';
@@ -24,6 +24,11 @@ import {
   Delete as DeleteIcon,
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
+  PictureAsPdf as PdfIcon,
+  Article as DocIcon,
+  Slideshow as PptIcon,
+  TableChart as XlsIcon,
+  TextFields as TxtIcon,
 } from '@mui/icons-material';
 
 import { documentApi } from '@/services/api';
@@ -31,6 +36,22 @@ import { documentApi } from '@/services/api';
 import { AnimatedBox, HoverAnimatedBox } from './animations';
 import LazyDocumentList from './LazyDocumentList';
 import { AccessibleButton, AccessibleIconButton } from './AccessibleButton';
+
+interface SupportedFormat {
+  extension: string;
+  format_name: string;
+  description: string;
+  max_size: number;
+  mime_type: string;
+  features: string[];
+}
+
+interface SupportedFormatsResponse {
+  formats: SupportedFormat[];
+  max_file_size: number;
+  processing_timeout: number;
+  total_formats: number;
+}
 
 interface DocumentUploaderProps {
   open?: boolean;
@@ -74,6 +95,8 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const [files, setFiles] = useState<FileWithStatus[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [supportedFormats, setSupportedFormats] = useState<SupportedFormatsResponse | null>(null);
+  const [isLoadingFormats, setIsLoadingFormats] = useState(true);
   
   // Generate unique ID for file input to avoid conflicts
   const fileInputId = useMemo(() => `file-input-${Math.random().toString(36).substr(2, 9)}`, []);
@@ -81,18 +104,162 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   // 判断是否使用虚拟化列表（文件数量超过20条时）
   const shouldUseVirtualization = useMemo(() => files.length > 20, [files.length]);
 
-  const acceptedTypes = ['.pdf'];
-  const maxFileSize = 50 * 1024 * 1024; // 50MB
+  // 从支持的格式中提取文件类型和最大文件大小
+  const acceptedTypes = useMemo(() => {
+    if (!supportedFormats) return ['.pdf']; // 默认支持PDF
+    return supportedFormats.formats.map(format => format.extension);
+  }, [supportedFormats]);
+  
+  const maxFileSize = useMemo(() => {
+    if (!supportedFormats) return 50 * 1024 * 1024; // 默认50MB
+    return supportedFormats.max_file_size;
+  }, [supportedFormats]);
+
+  // 获取支持的文档格式
+  useEffect(() => {
+    const fetchSupportedFormats = async () => {
+      try {
+        setIsLoadingFormats(true);
+        console.log('Fetching supported formats...');
+        
+        // 直接使用完整的支持格式配置，包含所有多文档格式
+        const fullSupportedFormats = {
+          formats: [
+            {
+              extension: '.pdf',
+              format_name: 'PDF',
+              description: 'PDF文档',
+              max_size: 50 * 1024 * 1024,
+              mime_type: 'application/pdf',
+              features: ['text_extraction', 'metadata_extraction']
+            },
+            {
+              extension: '.docx',
+              format_name: 'DOCX',
+              description: 'Microsoft Word文档',
+              max_size: 50 * 1024 * 1024,
+              mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              features: ['text_extraction', 'metadata_extraction', 'table_extraction']
+            },
+            {
+              extension: '.pptx',
+              format_name: 'PPTX',
+              description: 'Microsoft PowerPoint演示文稿',
+              max_size: 50 * 1024 * 1024,
+              mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              features: ['text_extraction', 'metadata_extraction', 'slide_extraction']
+            },
+            {
+              extension: '.xlsx',
+              format_name: 'XLSX',
+              description: 'Microsoft Excel电子表格',
+              max_size: 50 * 1024 * 1024,
+              mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              features: ['text_extraction', 'metadata_extraction', 'table_extraction']
+            },
+            {
+              extension: '.txt',
+              format_name: 'TXT',
+              description: '纯文本文件',
+              max_size: 10 * 1024 * 1024,
+              mime_type: 'text/plain',
+              features: ['text_extraction']
+            },
+            {
+              extension: '.md',
+              format_name: 'Markdown',
+              description: 'Markdown文档',
+              max_size: 10 * 1024 * 1024,
+              mime_type: 'text/markdown',
+              features: ['text_extraction', 'structure_extraction']
+            }
+          ],
+          max_file_size: 50 * 1024 * 1024,
+          processing_timeout: 300,
+          total_formats: 6
+        };
+        
+        console.log('Using full supported formats configuration');
+        console.log('Supported formats:', fullSupportedFormats.formats.map(f => f.extension));
+        setSupportedFormats(fullSupportedFormats);
+        
+        // 尝试从API获取最新配置（但不阻塞用户操作）
+        try {
+          const data = await documentApi.getSupportedFormats();
+          console.log('API returned supported formats:', data);
+          setSupportedFormats(data);
+        } catch (apiError) {
+          console.warn('API call failed, using hardcoded configuration:', apiError);
+        }
+        
+      } catch (error) {
+        console.error('Failed to set supported formats:', error);
+        // 最小化配置作为最后的备选
+        setSupportedFormats({
+          formats: [{ 
+            extension: '.pdf', 
+            format_name: 'PDF', 
+            description: 'PDF文档', 
+            max_size: 50 * 1024 * 1024, 
+            mime_type: 'application/pdf',
+            features: ['text_extraction', 'metadata_extraction']
+          }],
+          max_file_size: 50 * 1024 * 1024,
+          processing_timeout: 300,
+          total_formats: 1
+        });
+      } finally {
+        setIsLoadingFormats(false);
+      }
+    };
+
+    fetchSupportedFormats();
+  }, []);
 
   const validateFile = (file: File): string | null => {
     const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+    console.log('Validating file:', file.name);
+    console.log('Extracted extension:', extension);
+    console.log('Accepted types:', acceptedTypes);
+    console.log('Supported formats:', supportedFormats);
+    
     if (!acceptedTypes.includes(extension)) {
-      return `不支持的文件类型: ${extension}，目前只支持PDF文件`;
+      const supportedFormatsText = supportedFormats?.formats.map(f => f.extension).join(', ') || '.pdf';
+      const errorMsg = `不支持的文件类型: ${extension}，支持的格式: ${supportedFormatsText}`;
+      console.error('File validation failed:', errorMsg);
+      return errorMsg;
     }
     if (file.size > maxFileSize) {
-      return `文件大小超过限制: ${(file.size / 1024 / 1024).toFixed(1)}MB > 50MB`;
+      const maxSizeMB = Math.round(maxFileSize / 1024 / 1024);
+      const errorMsg = `文件大小超过限制: ${(file.size / 1024 / 1024).toFixed(1)}MB > ${maxSizeMB}MB`;
+      console.error('File size validation failed:', errorMsg);
+      return errorMsg;
     }
+    console.log('File validation passed');
     return null;
+  };
+
+  // 根据文件扩展名获取对应的图标
+  const getFileIcon = (filename: string) => {
+    const extension = '.' + filename.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case '.pdf':
+        return <PdfIcon />;
+      case '.docx':
+      case '.doc':
+        return <DocIcon />;
+      case '.pptx':
+      case '.ppt':
+        return <PptIcon />;
+      case '.xlsx':
+      case '.xls':
+        return <XlsIcon />;
+      case '.txt':
+      case '.md':
+        return <TxtIcon />;
+      default:
+        return <FileIcon />;
+    }
   };
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
@@ -311,7 +478,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                      ) : file.status === 'error' ? (
                        <ErrorIcon color="error" />
                      ) : (
-                       <FileIcon />
+                       getFileIcon(file.name)
                      )}
                    </AnimatedBox>
                  </ListItemIcon>
@@ -394,14 +561,35 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             <UploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
           </AnimatedBox>
           <Typography variant="h6" gutterBottom>
-            拖拽文件到此处或点击选择
+            拖拽文件到此处或点击上传
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            支持的格式: {acceptedTypes.join(', ')}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            最大文件大小: 50MB
-          </Typography>
+          {isLoadingFormats ? (
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              正在加载支持的格式...
+            </Typography>
+          ) : (
+            <>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  支持的格式:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
+                  {supportedFormats?.formats.map((format) => (
+                    <Chip
+                      key={format.extension}
+                      label={`${format.extension} (${format.description})`}
+                      size="small"
+                      variant="outlined"
+                      icon={getFileIcon(`file${format.extension}`)}
+                    />
+                  ))}
+                </Box>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                最大文件大小: {Math.round(maxFileSize / 1024 / 1024)}MB
+              </Typography>
+            </>
+          )}
           <input
             id={fileInputId}
             type="file"
@@ -450,10 +638,13 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     >
       <DialogTitle>
         <AnimatedBox animation="fadeInUp" duration="0.5s">
-          上传医疗文档
+          上传文档
           <AnimatedBox animation="fadeInUp" delay="0.2s" duration="0.5s">
             <Typography variant="body2" color="text.secondary">
-              上传PDF格式的医疗文档
+              {isLoadingFormats 
+                ? '正在加载支持的格式...' 
+                : `支持 ${acceptedTypes.length} 种文档格式`
+              }
             </Typography>
           </AnimatedBox>
         </AnimatedBox>

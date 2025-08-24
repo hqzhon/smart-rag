@@ -15,7 +15,7 @@ pypdf>=3.15.1
 pdfplumber>=0.10.2
 pytesseract>=0.3.10
 pillow>=10.0.0
-unstructured[pdf]>=0.10.0  # 布局感知PDF解析
+unstructured[all-docs]>=0.10.0  # 多格式文档解析支持
 python-magic>=0.4.27  # 文件类型检测
 
 # 机器学习
@@ -50,6 +50,13 @@ python-dotenv>=1.0.0
 pydantic>=2.0.0
 numpy==1.26.4
 pandas>=2.0.0
+
+# 多文档格式支持
+python-docx>=0.8.11  # Word文档处理
+openpyxl>=3.1.0  # Excel文档处理
+python-pptx>=0.6.21  # PowerPoint文档处理
+markdown>=3.5.0  # Markdown文档处理
+prometheus-client>=0.17.0  # 监控指标
 
 # 开发工具
 pytest>=7.4.3
