@@ -15,6 +15,8 @@ class Document(BaseModel):
     file_size: int
     content_type: str = "application/pdf"
     upload_time: datetime = Field(default_factory=datetime.now)
+    # 文档整体状态 - 支持所有SSE状态值
+    status: str = "uploading"  # 支持: uploading, processing, completed, failed, ready, connected, error, timeout, heartbeat, parsed, chat_ready, generating_metadata, vectorizing, uploaded 等
     processed: bool = False
     processing_status: str = "pending"  # pending, processing, completed, failed
     vectorized: bool = False  # 向量化状态

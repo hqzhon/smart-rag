@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   Box,
   Dialog,
@@ -7,16 +7,20 @@ import {
   DialogActions,
   Typography,
   LinearProgress,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  ListItemSecondaryAction,
+  Card,
+  CardContent,
   Alert,
-  Paper,
   Chip,
   SxProps,
   Theme,
+  Fade,
+  Slide,
+  CircularProgress,
+  Stack,
+  IconButton,
+  Tooltip,
+  Avatar,
+  Divider,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
@@ -29,13 +33,50 @@ import {
   Slideshow as PptIcon,
   TableChart as XlsIcon,
   TextFields as TxtIcon,
+  Refresh as RetryIcon,
+  FileUpload as DragIcon,
+  Speed as ProcessingIcon,
 } from '@mui/icons-material';
+import { keyframes } from '@mui/system';
 
 import { documentApi } from '@/services/api';
+import { AccessibleButton } from './AccessibleButton';
 
-import { AnimatedBox, HoverAnimatedBox } from './animations';
-import LazyDocumentList from './LazyDocumentList';
-import { AccessibleButton, AccessibleIconButton } from './AccessibleButton';
+// Animation keyframes
+const pulseAnimation = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+`;
+
+const slideUpAnimation = keyframes`
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+`;
+
+const progressAnimation = keyframes`
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+`;
 
 interface SupportedFormat {
   extension: string;
@@ -69,18 +110,13 @@ interface FileWithStatus {
   size: number;
   type: string;
   lastModified: number;
-  // File methods
   originalFile: File;
-  // Upload status - matching DocumentInfo status types
-  status: 'processing' | 'completed' | 'error' | 'uploaded' | 'vectorizing' | 'generating_metadata' | 'chat_ready';
+  status: 'pending' | 'uploading' | 'processing' | 'completed' | 'error' | 'uploaded' | 'vectorizing' | 'generating_metadata' | 'chat_ready';
   progress: number;
   error?: string;
   uploadResponse?: any;
-  // Blob methods
-  stream: () => ReadableStream<Uint8Array>;
-  text: () => Promise<string>;
-  arrayBuffer: () => Promise<ArrayBuffer>;
-  slice: (start?: number, end?: number, contentType?: string) => Blob;
+  documentId?: string;
+  canRetry?: boolean;
 }
 
 const DocumentUploader: React.FC<DocumentUploaderProps> = ({
@@ -97,32 +133,35 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [supportedFormats, setSupportedFormats] = useState<SupportedFormatsResponse | null>(null);
   const [isLoadingFormats, setIsLoadingFormats] = useState(true);
+  const [dragCounter, setDragCounter] = useState(0);
   
-  // Generate unique ID for file input to avoid conflicts
-  const fileInputId = useMemo(() => `file-input-${Math.random().toString(36).substr(2, 9)}`, []);
-  
-  // 判断是否使用虚拟化列表（文件数量超过20条时）
-  const shouldUseVirtualization = useMemo(() => files.length > 20, [files.length]);
+  const fileInputId = useMemo(() => `modern-file-input-${Math.random().toString(36).substr(2, 9)}`, []);
 
-  // 从支持的格式中提取文件类型和最大文件大小
+  // Get supported formats and file size limits
   const acceptedTypes = useMemo(() => {
-    if (!supportedFormats) return ['.pdf']; // 默认支持PDF
+    if (!supportedFormats) return ['.pdf'];
     return supportedFormats.formats.map(format => format.extension);
   }, [supportedFormats]);
   
   const maxFileSize = useMemo(() => {
-    if (!supportedFormats) return 50 * 1024 * 1024; // 默认50MB
+    if (!supportedFormats) return 50 * 1024 * 1024;
     return supportedFormats.max_file_size;
   }, [supportedFormats]);
 
-  // 获取支持的文档格式
+  // Reset files when dialog opens
+  useEffect(() => {
+    if (open && dialogMode) {
+      setFiles([]);
+      setIsUploading(false);
+    }
+  }, [open, dialogMode]);
+
+  // Load supported formats
   useEffect(() => {
     const fetchSupportedFormats = async () => {
       try {
         setIsLoadingFormats(true);
-        console.log('Fetching supported formats...');
         
-        // 直接使用完整的支持格式配置，包含所有多文档格式
         const fullSupportedFormats = {
           formats: [
             {
@@ -136,7 +175,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             {
               extension: '.docx',
               format_name: 'DOCX',
-              description: 'Microsoft Word文档',
+              description: 'Word文档',
               max_size: 50 * 1024 * 1024,
               mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
               features: ['text_extraction', 'metadata_extraction', 'table_extraction']
@@ -144,7 +183,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             {
               extension: '.pptx',
               format_name: 'PPTX',
-              description: 'Microsoft PowerPoint演示文稿',
+              description: 'PowerPoint',
               max_size: 50 * 1024 * 1024,
               mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
               features: ['text_extraction', 'metadata_extraction', 'slide_extraction']
@@ -152,7 +191,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             {
               extension: '.xlsx',
               format_name: 'XLSX',
-              description: 'Microsoft Excel电子表格',
+              description: 'Excel表格',
               max_size: 50 * 1024 * 1024,
               mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
               features: ['text_extraction', 'metadata_extraction', 'table_extraction']
@@ -160,7 +199,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             {
               extension: '.txt',
               format_name: 'TXT',
-              description: '纯文本文件',
+              description: '文本文件',
               max_size: 10 * 1024 * 1024,
               mime_type: 'text/plain',
               features: ['text_extraction']
@@ -179,14 +218,10 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
           total_formats: 6
         };
         
-        console.log('Using full supported formats configuration');
-        console.log('Supported formats:', fullSupportedFormats.formats.map(f => f.extension));
         setSupportedFormats(fullSupportedFormats);
         
-        // 尝试从API获取最新配置（但不阻塞用户操作）
         try {
           const data = await documentApi.getSupportedFormats();
-          console.log('API returned supported formats:', data);
           setSupportedFormats(data);
         } catch (apiError) {
           console.warn('API call failed, using hardcoded configuration:', apiError);
@@ -194,7 +229,6 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         
       } catch (error) {
         console.error('Failed to set supported formats:', error);
-        // 最小化配置作为最后的备选
         setSupportedFormats({
           formats: [{ 
             extension: '.pdf', 
@@ -216,524 +250,801 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     fetchSupportedFormats();
   }, []);
 
-  const validateFile = (file: File): string | null => {
-    const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-    console.log('Validating file:', file.name);
-    console.log('Extracted extension:', extension);
-    console.log('Accepted types:', acceptedTypes);
-    console.log('Supported formats:', supportedFormats);
-    
-    if (!acceptedTypes.includes(extension)) {
-      const supportedFormatsText = supportedFormats?.formats.map(f => f.extension).join(', ') || '.pdf';
-      const errorMsg = `不支持的文件类型: ${extension}，支持的格式: ${supportedFormatsText}`;
-      console.error('File validation failed:', errorMsg);
-      return errorMsg;
-    }
+  // File validation
+  const validateFile = useCallback((file: File): { isValid: boolean; error?: string } => {
     if (file.size > maxFileSize) {
-      const maxSizeMB = Math.round(maxFileSize / 1024 / 1024);
-      const errorMsg = `文件大小超过限制: ${(file.size / 1024 / 1024).toFixed(1)}MB > ${maxSizeMB}MB`;
-      console.error('File size validation failed:', errorMsg);
-      return errorMsg;
+      return {
+        isValid: false,
+        error: `文件大小超过限制 (${(maxFileSize / 1024 / 1024).toFixed(1)}MB)`
+      };
     }
-    console.log('File validation passed');
-    return null;
-  };
 
-  // 根据文件扩展名获取对应的图标
-  const getFileIcon = (filename: string) => {
-    const extension = '.' + filename.split('.').pop()?.toLowerCase();
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    if (!acceptedTypes.includes(fileExtension)) {
+      return {
+        isValid: false,
+        error: `不支持的文件格式 (${fileExtension})`
+      };
+    }
+
+    if (file.name.length > 255) {
+      return {
+        isValid: false,
+        error: '文件名过长 (最多255个字符)'
+      };
+    }
+
+    const problematicChars = /[<>:"/\\|?*]/;
+    if (problematicChars.test(file.name)) {
+      return {
+        isValid: false,
+        error: '文件名包含不允许的字符'
+      };
+    }
+
+    return { isValid: true };
+  }, [maxFileSize, acceptedTypes]);
+
+  // Get file icon
+  const getFileIcon = useCallback((fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    const iconProps = { sx: { fontSize: 24 } };
+    
     switch (extension) {
-      case '.pdf':
-        return <PdfIcon />;
-      case '.docx':
-      case '.doc':
-        return <DocIcon />;
-      case '.pptx':
-      case '.ppt':
-        return <PptIcon />;
-      case '.xlsx':
-      case '.xls':
-        return <XlsIcon />;
-      case '.txt':
-      case '.md':
-        return <TxtIcon />;
+      case 'pdf':
+        return <PdfIcon {...iconProps} sx={{ ...iconProps.sx, color: '#d32f2f' }} />;
+      case 'doc':
+      case 'docx':
+        return <DocIcon {...iconProps} sx={{ ...iconProps.sx, color: '#1976d2' }} />;
+      case 'ppt':
+      case 'pptx':
+        return <PptIcon {...iconProps} sx={{ ...iconProps.sx, color: '#ed6c02' }} />;
+      case 'xls':
+      case 'xlsx':
+        return <XlsIcon {...iconProps} sx={{ ...iconProps.sx, color: '#2e7d32' }} />;
+      case 'txt':
+      case 'md':
+        return <TxtIcon {...iconProps} sx={{ ...iconProps.sx, color: '#757575' }} />;
       default:
-        return <FileIcon />;
+        return <FileIcon {...iconProps} />;
     }
-  };
-
-  const addFiles = useCallback((newFiles: FileList | File[]) => {
-    const fileArray = Array.from(newFiles);
-    const validFiles: FileWithStatus[] = [];
-
-    fileArray.forEach((file) => {
-      const error = validateFile(file);
-      // 创建一个包含File属性和额外状态属性的新对象
-      const fileWithStatus = {
-        // 复制File对象的基本属性
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        lastModified: file.lastModified,
-        // 保持原始File对象的引用以便后续使用
-        originalFile: file,
-        // 添加状态属性
-        id: `${Date.now()}-${Math.random()}`,
-        status: error ? 'error' : 'processing',
-        progress: 0,
-        error: error || undefined,
-        // 添加File对象的方法
-        stream: file.stream.bind(file),
-        text: file.text.bind(file),
-        arrayBuffer: file.arrayBuffer.bind(file),
-        slice: file.slice.bind(file)
-      } as FileWithStatus;
-      
-      validFiles.push(fileWithStatus);
-    });
-
-    setFiles((prev) => [...prev, ...validFiles]);
   }, []);
 
-  const removeFile = (fileId: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== fileId));
-  };
+  // Add files
+  const addFiles = useCallback((newFiles: FileList | File[]) => {
+    const filesToAdd: FileWithStatus[] = [];
+    const fileArray = Array.from(newFiles);
 
-  const handleDragOver = (e: React.DragEvent) => {
+    fileArray.forEach(file => {
+      const validation = validateFile(file);
+      const fileId = `${file.name}-${file.lastModified}-${Math.random()}`;
+      
+      if (validation.isValid) {
+        filesToAdd.push({
+          id: fileId,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          lastModified: file.lastModified,
+          originalFile: file,
+          status: 'pending',
+          progress: 0,
+          canRetry: false,
+        });
+      } else {
+        filesToAdd.push({
+          id: fileId,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          lastModified: file.lastModified,
+          originalFile: file,
+          status: 'error',
+          progress: 0,
+          error: validation.error,
+          canRetry: false,
+        });
+      }
+    });
+
+    setFiles(prev => [...prev, ...filesToAdd]);
+  }, [validateFile]);
+
+  // Remove file
+  const removeFile = useCallback((fileId: string) => {
+    setFiles(prev => prev.filter(file => file.id !== fileId));
+  }, []);
+
+  // Retry file upload
+  const retryFile = useCallback((fileId: string) => {
+    setFiles(prev => prev.map(file => 
+      file.id === fileId 
+        ? { ...file, status: 'pending', progress: 0, error: undefined, canRetry: false }
+        : file
+    ));
+  }, []);
+
+  // Drag and drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => prev + 1);
     setIsDragging(true);
-  };
+  }, []);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
-  };
+    e.stopPropagation();
+    setDragCounter(prev => {
+      const newCounter = prev - 1;
+      if (newCounter === 0) {
+        setIsDragging(false);
+      }
+      return newCounter;
+    });
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setIsDragging(false);
+    setDragCounter(0);
+    
     const droppedFiles = e.dataTransfer.files;
-    addFiles(droppedFiles);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      addFiles(e.target.files);
+    if (droppedFiles.length > 0) {
+      addFiles(droppedFiles);
     }
-  };
+  }, [addFiles]);
 
-  const uploadFiles = async () => {
-    const pendingFiles = files.filter((f) => f.status === 'processing');
+  // File input change handler
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (selectedFiles && selectedFiles.length > 0) {
+      addFiles(selectedFiles);
+    }
+    e.target.value = '';
+  }, [addFiles]);
+
+  // SSE connection for progress tracking
+  const connectSSE = useCallback((documentId: string, fileId: string) => {
+    const eventSource = new EventSource(`/api/v1/documents/${documentId}/status-stream`);
+    
+    const timeout = setTimeout(() => {
+      eventSource.close();
+      setFiles(prev => prev.map(file => 
+        file.id === fileId && file.status === 'processing'
+          ? { ...file, status: 'error', error: '处理超时', canRetry: true }
+          : file
+      ));
+    }, 300000); // 5 minutes timeout
+
+    eventSource.onopen = () => {
+      console.log(`SSE connection opened for document ${documentId}`);
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('SSE message received:', data);
+        
+        setFiles(prev => {
+          const updatedFiles = prev.map(file => {
+            if (file.id === fileId) {
+              const updatedFile = { ...file };
+              
+              if (data.status) {
+                updatedFile.status = data.status;
+              }
+              
+              if (data.progress !== undefined) {
+                updatedFile.progress = Math.max(0, Math.min(100, data.progress));
+              }
+              
+              // Handle error status and messages
+              if (data.status === 'error' || data.status === 'failed' || data.error) {
+                // Use specific error message from SSE if available, otherwise use data.error or data.message
+                let errorMessage = data.error || data.message || '处理失败';
+                
+                // Set error status and message
+                updatedFile.status = 'error';
+                updatedFile.error = errorMessage;
+                updatedFile.canRetry = true;
+                
+                // Close SSE connection on error
+                clearTimeout(timeout);
+                eventSource.close();
+              } else if (data.error) {
+                // Handle general error field
+                updatedFile.error = data.error;
+                updatedFile.canRetry = true;
+              }
+              
+              if (data.status === 'completed' || data.status === 'chat_ready') {
+                clearTimeout(timeout);
+                eventSource.close();
+                
+                // Trigger onUploadSuccess when file reaches completed/chat_ready status
+                if (onUploadSuccess) {
+                  setTimeout(() => {
+                    onUploadSuccess([{
+                      file: updatedFile.originalFile,
+                      response: updatedFile.uploadResponse || { id: updatedFile.documentId, status: updatedFile.status }
+                    }]);
+                  }, 0);
+                }
+              }
+              
+              return updatedFile;
+            }
+            return file;
+          });
+          
+          return updatedFiles;
+        });
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      clearTimeout(timeout);
+      eventSource.close();
+      
+      setFiles(prev => prev.map(file => 
+        file.id === fileId && (file.status === 'processing' || file.status === 'uploading')
+          ? { ...file, status: 'error', error: '连接中断', canRetry: true }
+          : file
+      ));
+    };
+
+    return () => {
+      clearTimeout(timeout);
+      eventSource.close();
+    };
+  }, [onUploadSuccess]);
+
+  // Upload files
+  const uploadFiles = useCallback(async () => {
+    const pendingFiles = files.filter(file => file.status === 'pending');
     if (pendingFiles.length === 0) return;
 
     setIsUploading(true);
-    let updatedFiles = [...files];
-    const totalFilesToUpload = pendingFiles.length; // 保存原始待上传文件数量
+    const uploadedDocuments: Array<{ file: File; response: any }> = [];
 
     for (const file of pendingFiles) {
       try {
-        // 更新状态为上传中
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.id === file.id ? { ...f, status: 'uploaded', progress: 0 } : f
-          )
-        );
+        setFiles(prev => prev.map(f => 
+          f.id === file.id ? { ...f, status: 'uploading', progress: 0 } : f
+        ));
 
-        // 模拟上传进度
-        const progressInterval = setInterval(() => {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === file.id && f.progress < 90
-                ? { ...f, progress: f.progress + 10 }
-                : f
-            )
-          );
-        }, 200);
-
-        // 上传文件
         const response = await documentApi.uploadDocument(file.originalFile);
+        console.log('Upload response:', response);
 
-        clearInterval(progressInterval);
+        const documentId = response.document_id;
+        if (!documentId) {
+          throw new Error('No document_id in response');
+        }
 
-        // 更新状态为成功，保存响应信息
-        setFiles((prev) => {
-          const newFiles = prev.map((f) =>
-            f.id === file.id
-              ? { 
-                  ...f, 
-                  status: 'completed' as const, 
-                  progress: 100,
-                  // 保存上传响应信息
-                  uploadResponse: response
-                }
-              : f
-          );
-          updatedFiles = newFiles;
-          return newFiles;
-        });
-      } catch (error) {
-        // 更新状态为失败
-        setFiles((prev) => {
-          const newFiles = prev.map((f) =>
-            f.id === file.id
-              ? {
-                  ...f,
-                  status: 'error' as const,
-                  progress: 0,
-                  error: error instanceof Error ? error.message : '上传失败',
-                }
-              : f
-          );
-          updatedFiles = newFiles;
-          return newFiles;
-        });
+        setFiles(prev => prev.map(f => 
+          f.id === file.id 
+            ? { 
+                ...f, 
+                status: 'processing', 
+                progress: 10, 
+                uploadResponse: response,
+                documentId: documentId
+              } 
+            : f
+        ));
+
+        uploadedDocuments.push({ file: file.originalFile, response });
+        connectSSE(documentId, file.id);
+
+      } catch (error: any) {
+        console.error('Upload failed for file:', file.name, error);
+        
+        let errorMessage = '上传失败';
+        let canRetry = true;
+        
+        if (error.response) {
+          const status = error.response.status;
+          switch (status) {
+            case 413:
+              errorMessage = '文件过大';
+              canRetry = false;
+              break;
+            case 415:
+              errorMessage = '不支持的文件格式';
+              canRetry = false;
+              break;
+            case 403:
+              errorMessage = '权限不足';
+              canRetry = false;
+              break;
+            case 429:
+              errorMessage = '请求过于频繁，请稍后重试';
+              break;
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+              errorMessage = '服务器错误，请稍后重试';
+              break;
+            default:
+              errorMessage = `上传失败 (${status})`;
+          }
+        } else if (error.code === 'NETWORK_ERROR' || !navigator.onLine) {
+          errorMessage = '网络连接失败';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+
+        setFiles(prev => prev.map(f => 
+          f.id === file.id 
+            ? { ...f, status: 'error', error: errorMessage, canRetry }
+            : f
+        ));
       }
     }
 
     setIsUploading(false);
-
-    // 使用更新后的文件状态来获取成功文件
-    const successFiles = updatedFiles.filter((f) => f.status === 'completed');
-    if (successFiles.length > 0 && onUploadSuccess) {
-      // 传递文件和响应信息
-      const documentsWithResponse = successFiles.map(file => ({
-        file: file.originalFile,
-        response: file.uploadResponse
-      }));
-      onUploadSuccess(documentsWithResponse);
-    }
     
-    // 检查是否应该自动关闭上传页面
-    // 条件：completed、error状态，或者chat_ready状态（表示文档已具备聊天交互功能）
-    const finishedFiles = updatedFiles.filter((f) => 
-      f.status === 'completed' || f.status === 'error' || f.status === 'chat_ready'
+    // onUploadSuccess will be triggered by SSE status updates when files reach completed/chat_ready status
+  }, [files, connectSSE, onUploadSuccess]);
+
+  // Check if all files are completed or ready for chat (allow close only when all files are done)
+  const canClose = useMemo(() => {
+    if (files.length === 0) return true;
+    return files.every(file => 
+      file.status === 'completed' || file.status === 'chat_ready'
     );
-    
-    if (dialogMode && finishedFiles.length === totalFilesToUpload) {
-      setTimeout(() => {
-        handleClose();
-      }, 1500); // 延迟1.5秒关闭，让用户看到最终状态
-    }
-  };
+  }, [files]);
 
-  const handleClose = () => {
-    if (!isUploading) {
-      setFiles([]);
-      onClose?.();
-    }
-  };
+  // onUploadSuccess is now handled entirely by SSE status updates above
 
+  // Handle close
+  const handleClose = useCallback(() => {
+    if (!isUploading && canClose && onClose) {
+      onClose();
+    }
+  }, [isUploading, canClose, onClose]);
+
+  // Format file size
+  const formatFileSize = useCallback((bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }, []);
+
+  // Get status color
+  const getStatusColor = useCallback((status: FileWithStatus['status']) => {
+    switch (status) {
+      case 'completed':
+      case 'chat_ready':
+        return 'success';
+      case 'error':
+        return 'error';
+      case 'uploading':
+      case 'processing':
+      case 'vectorizing':
+      case 'generating_metadata':
+        return 'primary';
+      default:
+        return 'default';
+    }
+  }, []);
+
+  // Get status text
+  const getStatusText = useCallback((status: FileWithStatus['status']) => {
+    switch (status) {
+      case 'pending':
+        return '等待上传';
+      case 'uploading':
+        return '上传中';
+      case 'processing':
+        return '处理中';
+      case 'vectorizing':
+        return '向量化中';
+      case 'generating_metadata':
+        return '生成元数据';
+      case 'completed':
+      case 'chat_ready':
+        return '完成';
+      case 'error':
+        return '错误';
+      default:
+        return '处理中';
+    }
+  }, []);
+
+  // Render file list
   const renderFileList = () => {
-     if (shouldUseVirtualization) {
-       return (
-         <LazyDocumentList
-           documents={files.map(file => ({
-             id: file.id,
-             name: file.name,
-             size: file.size,
-             type: file.name.split('.').pop() || '',
-             uploadTime: new Date().toISOString(),
-             status: file.status,
-             progress: file.progress,
-             error: file.error
-           }))}
-           onDelete={removeFile}
-           onLoadMore={async () => {}}
-           onView={() => {}}
-           hasNextPage={false}
-           height={300}
-           isLoading={isUploading}
-         />
-       );
-     }
-     
-     return (
-       <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-         {files.map((file, index) => (
-           <AnimatedBox 
-             key={file.id} 
-             animation="fadeInLeft" 
-             duration="0.4s" 
-             delay={`${index * 0.1}s`}
-           >
-             <HoverAnimatedBox hoverAnimation="scale">
-               <ListItem 
-                 divider
-                 sx={{
-                   borderRadius: 2,
-                   mb: 1,
-                   transition: 'all 0.2s ease-in-out',
-                   '&:hover': {
-                     bgcolor: 'action.hover',
-                   },
-                 }}
-               >
-                 <ListItemIcon>
-                   <AnimatedBox 
-                     animation={file.status === 'uploaded' ? 'pulse' : undefined} 
-                     duration="1s"
-                   >
-                     {file.status === 'completed' ? (
-                       <SuccessIcon color="success" />
-                     ) : file.status === 'error' ? (
-                       <ErrorIcon color="error" />
-                     ) : (
-                       getFileIcon(file.name)
-                     )}
-                   </AnimatedBox>
-                 </ListItemIcon>
-                 <ListItemText
-                   primary={file.name}
-                   secondary={
-                     <React.Fragment>
-                       <Typography variant="caption" color="text.secondary" component="span" display="block">
-                         {file.size ? (file.size / 1024 / 1024).toFixed(1) : '0.0'} MB
-                       </Typography>
-                       {file.status === 'uploaded' && (
-                         <LinearProgress
-                           variant="determinate"
-                           value={file.progress}
-                           sx={{ mt: 0.5 }}
-                         />
-                       )}
-                       {file.status === 'completed' && (
-                         <Typography variant="caption" color="success.main" component="span" display="block">
-                           上传成功
-                         </Typography>
-                       )}
-                       {file.error && (
-                         <Typography variant="caption" color="error" component="span" display="block">
-                           {file.error}
-                         </Typography>
-                       )}
-                     </React.Fragment>
-                   }
-                 />
-                 <ListItemSecondaryAction>
-                   <HoverAnimatedBox hoverAnimation="scale">
-                     <AccessibleIconButton
-                       edge="end"
-                       onClick={() => removeFile(file.id)}
-                       disabled={isUploading}
-                       size="small"
-                       aria-label="删除文件"
-                     >
-                       <DeleteIcon />
-                     </AccessibleIconButton>
-                   </HoverAnimatedBox>
-                 </ListItemSecondaryAction>
-               </ListItem>
-             </HoverAnimatedBox>
-           </AnimatedBox>
-         ))}
-       </List>
-     );
-   };
+    if (files.length === 0) return null;
 
+    return (
+      <Box sx={{ mt: 3 }}>
+        <Typography variant="h6" gutterBottom sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+          mb: 2
+        }}>
+          <FileIcon />
+          文件列表 ({files.length})
+        </Typography>
+        
+        <Stack spacing={2}>
+          {files.map((file, index) => (
+            <Fade in timeout={300 + index * 100} key={file.id}>
+              <Card 
+                elevation={2}
+                sx={{
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  animation: `${slideUpAnimation} 0.5s ease-out ${index * 0.1}s both`,
+                  '&:hover': {
+                    elevation: 4,
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+                  }
+                }}
+              >
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Avatar sx={{ 
+                      bgcolor: 'transparent',
+                      border: '2px solid',
+                      borderColor: `${getStatusColor(file.status)}.main`,
+                    }}>
+                      {getFileIcon(file.name)}
+                    </Avatar>
+                    
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography 
+                        variant="subtitle1" 
+                        sx={{ 
+                          fontWeight: 600,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {file.name}
+                      </Typography>
+                      
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatFileSize(file.size)}
+                        </Typography>
+                        
+                        <Chip 
+                          label={getStatusText(file.status)}
+                          color={getStatusColor(file.status)}
+                          size="small"
+                          sx={{ 
+                            fontWeight: 500,
+                            animation: file.status === 'processing' || file.status === 'uploading' 
+                              ? `${pulseAnimation} 2s infinite` 
+                              : 'none'
+                          }}
+                        />
+                      </Box>
+                      
+                      {file.error && (
+                        <Alert 
+                          severity="error" 
+                          sx={{ mt: 1, py: 0.5 }}
+                          action={
+                            file.canRetry ? (
+                              <Tooltip title="重试">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => retryFile(file.id)}
+                                  sx={{ ml: 1 }}
+                                >
+                                  <RetryIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            ) : undefined
+                          }
+                        >
+                          {file.error}
+                        </Alert>
+                      )}
+                      
+                      {(file.status === 'uploading' || file.status === 'processing' || file.status === 'vectorizing' || file.status === 'generating_metadata') && (
+                        <Box sx={{ mt: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={file.progress} 
+                            sx={{
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: 'rgba(0,0,0,0.1)',
+                              '& .MuiLinearProgress-bar': {
+                                borderRadius: 3,
+                                background: file.status === 'uploading' 
+                                  ? 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)'
+                                  : 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)',
+                                '&::after': {
+                                  content: '""',
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  bottom: 0,
+                                  right: 0,
+                                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+                                  animation: `${progressAnimation} 2s infinite`,
+                                }
+                              }
+                            }}
+                          />
+                          <Typography 
+                            variant="caption" 
+                            color="text.secondary"
+                            sx={{ mt: 0.5, display: 'block' }}
+                          >
+                            {file.progress}%
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {file.status === 'completed' || file.status === 'chat_ready' ? (
+                        <Tooltip title="上传成功">
+                          <SuccessIcon color="success" sx={{ fontSize: 24 }} />
+                        </Tooltip>
+                      ) : file.status === 'error' ? (
+                        <Tooltip title="上传失败">
+                          <ErrorIcon color="error" sx={{ fontSize: 24 }} />
+                        </Tooltip>
+                      ) : (file.status === 'uploading' || file.status === 'processing' || file.status === 'vectorizing' || file.status === 'generating_metadata') ? (
+                        <Tooltip title="处理中">
+                          <CircularProgress size={24} thickness={4} />
+                        </Tooltip>
+                      ) : null}
+                      
+                      <Tooltip title="删除">
+                        <IconButton
+                          onClick={() => removeFile(file.id)}
+                          disabled={file.status === 'uploading' || file.status === 'processing'}
+                          sx={{
+                            color: 'error.main',
+                            '&:hover': {
+                              backgroundColor: 'error.light',
+                              color: 'error.contrastText',
+                            }
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Fade>
+          ))}
+        </Stack>
+      </Box>
+    );
+  };
+
+  // Upload area component
   const uploadArea = (
-    <AnimatedBox animation="fadeInUp" duration="0.6s">
-      <HoverAnimatedBox hoverAnimation="scale">
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 4,
-            textAlign: 'center',
-            borderStyle: 'dashed',
-            borderWidth: 2,
-            borderColor: isDragging ? 'primary.main' : 'divider',
-            bgcolor: isDragging ? 'primary.light' : 'background.paper',
-            cursor: 'pointer',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            borderRadius: 3,
-            '&:hover': {
-              borderColor: 'primary.main',
-              bgcolor: 'primary.light',
-              transform: 'translateY(-4px) scale(1.02)',
-              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)',
-            },
-          }}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => document.getElementById(fileInputId)?.click()}
-        >
-          <AnimatedBox animation={isDragging ? 'bounce' : 'pulse'} duration="1.5s">
-            <UploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-          </AnimatedBox>
-          <Typography variant="h6" gutterBottom>
-            拖拽文件到此处或点击上传
+    <Box
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      sx={{
+        border: '2px dashed',
+        borderColor: isDragging ? 'primary.main' : 'grey.300',
+        borderRadius: 3,
+        p: 4,
+        textAlign: 'center',
+        cursor: 'pointer',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        background: isDragging 
+          ? 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(25, 118, 210, 0.05) 100%)'
+          : 'linear-gradient(135deg, rgba(0, 0, 0, 0.02) 0%, rgba(0, 0, 0, 0.01) 100%)',
+        backdropFilter: 'blur(10px)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&:hover': {
+          borderColor: 'primary.main',
+          backgroundColor: 'rgba(25, 118, 210, 0.04)',
+          transform: 'translateY(-2px)',
+          boxShadow: '0 8px 25px rgba(0,0,0,0.1)',
+        },
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: '-100%',
+          width: '100%',
+          height: '100%',
+          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
+          transition: 'left 0.5s',
+        },
+        '&:hover::before': {
+          left: '100%',
+        }
+      }}
+      onClick={() => document.getElementById(fileInputId)?.click()}
+    >
+      <input
+        id={fileInputId}
+        type="file"
+        multiple
+        accept={acceptedTypes.join(',')}
+        onChange={handleFileInputChange}
+        style={{ display: 'none' }}
+      />
+      
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        gap: 2,
+        position: 'relative',
+        zIndex: 1
+      }}>
+        <Avatar sx={{ 
+          width: 64, 
+          height: 64, 
+          bgcolor: 'primary.main',
+          animation: isDragging ? `${pulseAnimation} 1s infinite` : 'none',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          boxShadow: '0 8px 32px rgba(102, 126, 234, 0.3)',
+        }}>
+          {isDragging ? <DragIcon sx={{ fontSize: 32 }} /> : <UploadIcon sx={{ fontSize: 32 }} />}
+        </Avatar>
+        
+        <Box>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+            {isDragging ? '释放文件以上传' : '拖拽文件到此处或点击选择'}
           </Typography>
-          {isLoadingFormats ? (
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              正在加载支持的格式...
-            </Typography>
-          ) : (
-            <>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  支持的格式:
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
-                  {supportedFormats?.formats.map((format) => (
-                    <Chip
-                      key={format.extension}
-                      label={`${format.extension} (${format.description})`}
-                      size="small"
-                      variant="outlined"
-                      icon={getFileIcon(`file${format.extension}`)}
-                    />
-                  ))}
-                </Box>
-              </Box>
-              <Typography variant="caption" color="text.secondary">
-                最大文件大小: {Math.round(maxFileSize / 1024 / 1024)}MB
-              </Typography>
-            </>
+          
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            支持多文件上传，最大 {(maxFileSize / 1024 / 1024).toFixed(0)}MB
+          </Typography>
+          
+          {supportedFormats && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
+              {supportedFormats.formats.map((format) => (
+                <Chip
+                  key={format.extension}
+                  label={format.format_name}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    borderColor: 'primary.main',
+                    color: 'primary.main',
+                    '&:hover': {
+                      backgroundColor: 'primary.main',
+                      color: 'primary.contrastText',
+                    }
+                  }}
+                />
+              ))}
+            </Box>
           )}
-          <input
-            id={fileInputId}
-            type="file"
-            multiple
-            accept={acceptedTypes.join(',')}
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
-        </Paper>
-      </HoverAnimatedBox>
-    </AnimatedBox>
+        </Box>
+      </Box>
+    </Box>
   );
 
   if (!dialogMode) {
     return (
-      <HoverAnimatedBox hoverAnimation="scale">
-        <AccessibleButton
-          variant={variant}
-          size={size}
-          startIcon={<UploadIcon />}
-          onClick={() => document.getElementById(fileInputId)?.click()}
-          sx={sx}
-          aria-label="上传文档"
-        >
-          上传文档
-          <input
-            id={fileInputId}
-            type="file"
-            multiple
-            accept={acceptedTypes.join(',')}
-            onChange={handleFileSelect}
-            style={{ display: 'none' }}
-          />
-        </AccessibleButton>
-      </HoverAnimatedBox>
+      <AccessibleButton
+        variant={variant}
+        size={size}
+        startIcon={<UploadIcon />}
+        onClick={() => document.getElementById(fileInputId)?.click()}
+        sx={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+            transform: 'translateY(-2px)',
+            boxShadow: '0 8px 25px rgba(102, 126, 234, 0.3)',
+          },
+          ...sx
+        }}
+      >
+        上传文档
+        <input
+          id={fileInputId}
+          type="file"
+          multiple
+          accept={acceptedTypes.join(',')}
+          onChange={handleFileInputChange}
+          style={{ display: 'none' }}
+        />
+      </AccessibleButton>
     );
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
+    <Dialog 
+      open={open} 
+      onClose={canClose ? handleClose : undefined}
       maxWidth="md"
       fullWidth
-      disableEscapeKeyDown={isUploading}
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.95) 100%)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
+        }
+      }}
+      TransitionComponent={Slide}
+      TransitionProps={{ direction: 'up' } as any}
     >
-      <DialogTitle>
-        <AnimatedBox animation="fadeInUp" duration="0.5s">
-          上传文档
-          <AnimatedBox animation="fadeInUp" delay="0.2s" duration="0.5s">
-            <Typography variant="body2" color="text.secondary">
-              {isLoadingFormats 
-                ? '正在加载支持的格式...' 
-                : `支持 ${acceptedTypes.length} 种文档格式`
-              }
-            </Typography>
-          </AnimatedBox>
-        </AnimatedBox>
+      <DialogTitle sx={{ 
+        py: 2.5,
+        px: 3,
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        color: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1
+      }}>
+        <UploadIcon />
+        文档上传
       </DialogTitle>
       
-      <DialogContent>
-        {uploadArea}
-        
-        {files.length > 0 && (
-          <AnimatedBox animation="fadeInUp" delay="0.3s" duration="0.5s">
-            <Box sx={{ mt: 3 }}>
-              <AnimatedBox animation="fadeInLeft" delay="0.1s">
-                <Typography variant="subtitle2" gutterBottom>
-                  文件列表 ({files.length})
-                </Typography>
-              </AnimatedBox>
-              {renderFileList()}
+      <DialogContent sx={{ p: 3, pt: 2 }}>
+        {isLoadingFormats ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <>
+            <Box sx={{ mt: 1, mb: 2 }}>
+              {uploadArea}
             </Box>
-          </AnimatedBox>
-        )}
-
-        {files.some((f) => f.status === 'error') && (
-          <AnimatedBox animation="fadeInUp" delay="0.4s">
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              部分文件上传失败，请检查文件格式和大小
-            </Alert>
-          </AnimatedBox>
+            {renderFileList()}
+          </>
         )}
       </DialogContent>
-
-      <DialogActions sx={{ p: 3, gap: 2 }}>
-        <HoverAnimatedBox hoverAnimation="scale">
-          <AccessibleButton
-            onClick={handleClose}
-            disabled={isUploading}
-            variant="outlined"
-            aria-label="取消上传"
-            sx={{
-              borderRadius: 2,
-              textTransform: 'none',
-              px: 3,
-              py: 1.5,
-              fontSize: '0.95rem',
-              fontWeight: 500,
-              borderColor: 'divider',
-              color: 'text.secondary',
-              '&:hover': {
-                borderColor: 'primary.main',
-                backgroundColor: 'action.hover',
-              },
-            }}
-          >
-            取消
-          </AccessibleButton>
-        </HoverAnimatedBox>
-        <AnimatedBox animation={isUploading ? 'pulse' : undefined}>
-          <HoverAnimatedBox hoverAnimation="scale">
-            <AccessibleButton
-              onClick={uploadFiles}
-              variant="contained"
-              disabled={
-                isUploading ||
-                files.length === 0 ||
-                !files.some((f) => f.status === 'processing')
-              }
-              loading={isUploading}
-              startIcon={<UploadIcon />}
-              aria-label={isUploading ? '正在上传文件' : '开始上传文件'}
-              sx={{
-                borderRadius: 2,
-                textTransform: 'none',
-                px: 3,
-                py: 1.5,
-                fontSize: '0.95rem',
-                fontWeight: 500,
-                boxShadow: 'none',
-                '&:hover': {
-                  boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
-                },
-                '&:disabled': {
-                  backgroundColor: 'action.disabledBackground',
-                  color: 'action.disabled',
-                },
-              }}
-            >
-              {isUploading ? '上传中...' : '开始上传'}
-            </AccessibleButton>
-          </HoverAnimatedBox>
-        </AnimatedBox>
+      
+      <Divider />
+      
+      <DialogActions sx={{ p: 3, pt: 2, gap: 2 }}>
+        <AccessibleButton 
+          onClick={handleClose}
+          disabled={isUploading || !canClose}
+          variant="outlined"
+        >
+          {!canClose ? '处理中...' : '取消'}
+        </AccessibleButton>
+        
+        <AccessibleButton
+          onClick={uploadFiles}
+          disabled={isUploading || files.filter(f => f.status === 'pending').length === 0}
+          variant="contained"
+          startIcon={isUploading ? <CircularProgress size={20} /> : <UploadIcon />}
+          sx={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%)',
+            }
+          }}
+        >
+          {isUploading ? '上传中...' : `上传 (${files.filter(f => f.status === 'pending').length})`}
+        </AccessibleButton>
       </DialogActions>
     </Dialog>
   );

@@ -366,37 +366,46 @@ class TestDocumentService:
     async def test_list_documents(self, document_service, mock_db_manager):
         """测试获取文档列表功能"""
         # 设置模拟返回值
-        mock_db_manager.list_documents.return_value = [
-            {
-                "id": "doc_1",
-                "title": "test1.pdf",
-                "file_path": "/path/to/test1.pdf",
-                "file_size": 1000,
-                "file_type": "application/pdf",
-                "created_at": datetime.now()
-            },
-            {
-                "id": "doc_2",
-                "title": "test2.pdf",
-                "file_path": "/path/to/test2.pdf",
-                "file_size": 2000,
-                "file_type": "application/pdf",
-                "created_at": datetime.now()
-            }
-        ]
+        mock_db_manager.list_documents.return_value = {
+            'documents': [
+                {
+                    "id": "doc_1",
+                    "title": "test1.pdf",
+                    "file_path": "/path/to/test1.pdf",
+                    "file_size": 1000,
+                    "file_type": "application/pdf",
+                    "created_at": datetime.now()
+                },
+                {
+                    "id": "doc_2",
+                    "title": "test2.pdf",
+                    "file_path": "/path/to/test2.pdf",
+                    "file_size": 2000,
+                    "file_type": "application/pdf",
+                    "created_at": datetime.now()
+                }
+            ],
+            'total': 2,
+            'page': 1,
+            'page_size': 10,
+            'total_pages': 1
+        }
         
         # 执行获取文档列表
-        documents = await document_service.list_documents(limit=10)
+        result = await document_service.list_documents(limit=10)
         
         # 验证结果
-        assert len(documents) == 2
-        assert documents[0].id == "doc_1"
-        assert documents[0].filename == "test1.pdf"
-        assert documents[1].id == "doc_2"
-        assert documents[1].filename == "test2.pdf"
+        assert 'documents' in result
+        assert 'total' in result
+        assert len(result['documents']) == 2
+        assert result['documents'][0].id == "doc_1"
+        assert result['documents'][0].filename == "test1.pdf"
+        assert result['documents'][1].id == "doc_2"
+        assert result['documents'][1].filename == "test2.pdf"
+        assert result['total'] == 2
         
         # 验证调用
-        mock_db_manager.list_documents.assert_called_once_with(limit=10)
+        mock_db_manager.list_documents.assert_called_once_with(limit=10, offset=0)
     
     def test_get_supported_formats(self, document_service):
         """测试获取支持的文件格式功能"""

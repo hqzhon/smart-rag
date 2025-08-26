@@ -196,18 +196,39 @@ class DatabaseManager(metaclass=SingletonMeta):
                     return row
                 return None
     
-    def list_documents(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """获取文档列表"""
+    def list_documents(self, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
+        """获取文档列表（支持分页）
+        
+        Args:
+            limit: 每页数量
+            offset: 偏移量
+            
+        Returns:
+            包含文档列表和总数的字典
+        """
         with self._get_connection() as conn:
             with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                # 获取总数
+                cursor.execute("SELECT COUNT(*) as total FROM documents")
+                total = cursor.fetchone()['total']
+                
+                # 获取分页数据
                 cursor.execute("""
                     SELECT id, title, file_type, file_size, created_at 
                     FROM documents 
                     ORDER BY created_at DESC 
-                    LIMIT %s
-                """, (limit,))
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
                 
-                return list(cursor.fetchall())
+                documents = list(cursor.fetchall())
+                
+                return {
+                    'documents': documents,
+                    'total': total,
+                    'page': (offset // limit) + 1,
+                    'page_size': limit,
+                    'total_pages': (total + limit - 1) // limit
+                }
     
     def get_all_documents_content(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """获取所有文档的完整内容，用于RAG工作流"""

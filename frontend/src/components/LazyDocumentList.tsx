@@ -1,15 +1,16 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React from 'react';
 import {
   Box,
   Chip,
+  List,
   ListItem,
   ListItemText,
   ListItemIcon,
   ListItemSecondaryAction,
   Typography,
   CircularProgress,
-  Skeleton,
   Fade,
+  Skeleton,
 } from '@mui/material';
 import {
   Description as DocumentIcon,
@@ -23,9 +24,6 @@ import {
   Psychology as MetadataIcon,
   Chat as ChatReadyIcon,
 } from '@mui/icons-material';
-import { FixedSizeList as VirtualList } from 'react-window';
-// @ts-ignore
-import InfiniteLoader from 'react-window-infinite-loader';
 
 import { AnimatedBox, HoverAnimatedBox } from './animations';
 import { AccessibleIconButton } from './AccessibleButton';
@@ -36,28 +34,22 @@ type Document = DocumentInfo;
 
 interface LazyDocumentListProps {
   documents: Document[];
-  onLoadMore: (startIndex: number, stopIndex: number) => Promise<void>;
+  onLoadMore?: (startIndex: number, stopIndex: number) => Promise<void>;
   onDelete: (documentId: string) => void;
   onView: (document: Document) => void;
-  hasNextPage: boolean;
+  hasNextPage?: boolean;
   isLoading: boolean;
   height?: number;
 }
 
 interface DocumentItemProps {
+  document: Document;
+  onDelete: (documentId: string) => void;
+  onView: (document: Document) => void;
   index: number;
-  style: React.CSSProperties;
-  data: {
-    documents: Document[];
-    onDelete: (documentId: string) => void;
-    onView: (document: Document) => void;
-    isLoading: boolean;
-  };
 }
 
-const DocumentItem: React.FC<DocumentItemProps> = ({ index, style, data }) => {
-  const { documents, onDelete, onView } = data;
-  const document = documents[index];
+const DocumentItem: React.FC<DocumentItemProps> = ({ document, onDelete, onView, index }) => {
 
   // 获取文档状态显示信息
   const getStatusInfo = (doc: Document) => {
@@ -78,18 +70,25 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ index, style, data }) => {
       return { label: '处理中', color: 'info' as const, icon: <ProcessingIcon /> };
     }
     
-    // 回退到简单状态字段
+    // 使用新的状态字段，同时保持对详细状态的支持
     switch (doc.status) {
+      case 'uploading':
+        return { label: '上传中', color: 'info' as const, icon: <UploadedIcon /> };
+      case 'processing':
+        return { label: '处理中', color: 'info' as const, icon: <ProcessingIcon /> };
+      case 'completed':
+        return { label: '已完成', color: 'success' as const, icon: <CompletedIcon /> };
+      case 'failed':
+        return { label: '失败', color: 'error' as const, icon: <ErrorIcon /> };
+      case 'ready':
+        return { label: '就绪', color: 'success' as const, icon: <ChatReadyIcon /> };
+      // 保持向后兼容的旧状态
       case 'chat_ready':
         return { label: '可聊天', color: 'success' as const, icon: <ChatReadyIcon /> };
       case 'generating_metadata':
         return { label: '生成摘要中', color: 'info' as const, icon: <MetadataIcon /> };
       case 'vectorizing':
         return { label: '向量化中', color: 'info' as const, icon: <ProcessingIcon /> };
-      case 'processing':
-        return { label: '处理中', color: 'info' as const, icon: <ProcessingIcon /> };
-      case 'completed':
-        return { label: '已完成', color: 'success' as const, icon: <CompletedIcon /> };
       case 'uploaded':
         return { label: '已上传', color: 'primary' as const, icon: <UploadedIcon /> };
       case 'error':
@@ -99,25 +98,8 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ index, style, data }) => {
     }
   };
 
-  // 如果文档不存在（正在加载），显示骨架屏
   if (!document) {
-    return (
-      <div style={style}>
-        <ListItem>
-          <ListItemIcon>
-            <Skeleton variant="circular" width={24} height={24} />
-          </ListItemIcon>
-          <ListItemText
-            primary={<Skeleton variant="text" width="60%" />}
-            secondary={<Skeleton variant="text" width="40%" />}
-          />
-          <ListItemSecondaryAction>
-            <Skeleton variant="circular" width={40} height={40} />
-            <Skeleton variant="circular" width={40} height={40} sx={{ ml: 1 }} />
-          </ListItemSecondaryAction>
-        </ListItem>
-      </div>
-    );
+    return null;
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -139,18 +121,17 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ index, style, data }) => {
   };
 
   return (
-    <div style={style}>
-      <AnimatedBox animation="fadeInUp" delay={`${(index % 10) * 0.05}s`}>
-        <Fade in timeout={300}>
-          <ListItem
-            sx={{
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              '&:hover': {
-                bgcolor: 'action.hover',
-              },
-            }}
-          >
+    <AnimatedBox animation="fadeInUp" delay={`${(index % 10) * 0.05}s`}>
+      <Fade in timeout={300}>
+        <ListItem
+          sx={{
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            '&:hover': {
+              bgcolor: 'action.hover',
+            },
+          }}
+        >
             <ListItemIcon>
               <HoverAnimatedBox hoverAnimation="scale">
                 <DocumentIcon color="primary" />
@@ -211,73 +192,19 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ index, style, data }) => {
                 </AccessibleIconButton>
               </HoverAnimatedBox>
             </ListItemSecondaryAction>
-          </ListItem>
-        </Fade>
-      </AnimatedBox>
-    </div>
+        </ListItem>
+      </Fade>
+    </AnimatedBox>
   );
 };
 
 const LazyDocumentList: React.FC<LazyDocumentListProps> = ({
   documents,
-  onLoadMore,
   onDelete,
   onView,
-  hasNextPage,
   isLoading,
   height = 400,
 }) => {
-  const [loadingItems, setLoadingItems] = useState<Set<number>>(new Set());
-
-  const itemData = useMemo(
-    () => ({
-      documents,
-      onDelete,
-      onView,
-      isLoading,
-    }),
-    [documents, onDelete, onView, isLoading]
-  );
-
-  // 检查项目是否已加载
-  const isItemLoaded = useCallback(
-    (index: number) => {
-      return !!documents[index];
-    },
-    [documents]
-  );
-
-  // 加载更多项目
-  const loadMoreItems = useCallback(
-    async (startIndex: number, stopIndex: number) => {
-      if (isLoading) return;
-      
-      // 标记正在加载的项目
-      const newLoadingItems = new Set(loadingItems);
-      for (let i = startIndex; i <= stopIndex; i++) {
-        newLoadingItems.add(i);
-      }
-      setLoadingItems(newLoadingItems);
-
-      try {
-        await onLoadMore(startIndex, stopIndex);
-      } finally {
-        // 清除加载状态
-        setLoadingItems(prev => {
-          const newSet = new Set(prev);
-          for (let i = startIndex; i <= stopIndex; i++) {
-            newSet.delete(i);
-          }
-          return newSet;
-        });
-      }
-    },
-    [onLoadMore, isLoading, loadingItems]
-  );
-
-  // 计算总项目数（包括可能需要加载的项目）
-  const itemCount = hasNextPage ? documents.length + 10 : documents.length;
-
   if (documents.length === 0 && !isLoading) {
     return (
       <AnimatedBox animation="fadeInUp">
@@ -285,68 +212,86 @@ const LazyDocumentList: React.FC<LazyDocumentListProps> = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
             justifyContent: 'center',
-            height: '200px',
+            alignItems: 'center',
+            height: height,
             color: 'text.secondary',
+            textAlign: 'center',
+            px: 3,
           }}
         >
-          <DocumentIcon sx={{ fontSize: 48, mb: 2, opacity: 0.5 }} />
-          <Typography variant="body1">暂无文档</Typography>
-          <Typography variant="caption" sx={{ mt: 1 }}>
-            上传文档后将在此处显示
+          <Box
+            sx={{
+              width: 80,
+              height: 80,
+              borderRadius: '50%',
+              backgroundColor: 'action.hover',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mb: 2,
+            }}
+          >
+            <DocumentIcon sx={{ fontSize: 40, color: 'text.disabled' }} />
+          </Box>
+          <Typography variant="h6" sx={{ mb: 1, fontWeight: 500 }}>
+            暂无文档
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            您还没有上传任何文档，点击上方的上传按钮开始添加文档
           </Typography>
         </Box>
       </AnimatedBox>
     );
   }
 
+  // 骨架屏组件
+  const SkeletonItem = () => (
+    <ListItem sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
+      <ListItemIcon>
+        <Skeleton variant="circular" width={24} height={24} />
+      </ListItemIcon>
+      <ListItemText
+        primary={<Skeleton variant="text" width="60%" height={24} />}
+        secondary={
+          <>
+            <Skeleton variant="text" width="40%" height={16} sx={{ mt: 0.5 }} />
+            <Skeleton variant="rectangular" width={80} height={20} sx={{ mt: 0.5, borderRadius: 1 }} />
+          </>
+        }
+      />
+      <ListItemSecondaryAction>
+        <Skeleton variant="circular" width={32} height={32} sx={{ mr: 1 }} />
+        <Skeleton variant="circular" width={32} height={32} />
+      </ListItemSecondaryAction>
+    </ListItem>
+  );
+
+  if (isLoading && documents.length === 0) {
+    return (
+      <Box sx={{ height: height, overflow: 'auto' }}>
+        <List>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <SkeletonItem key={index} />
+          ))}
+        </List>
+      </Box>
+    );
+  }
+
   return (
-    <Box
-      sx={{
-        height: '100%',
-        '& .react-window-list': {
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(0,0,0,0.2) transparent',
-          '&::-webkit-scrollbar': {
-            width: '8px',
-          },
-          '&::-webkit-scrollbar-track': {
-            background: 'transparent',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(0,0,0,0.2)',
-            borderRadius: '4px',
-            '&:hover': {
-              background: 'rgba(0,0,0,0.3)',
-            },
-          },
-        },
-      }}
-    >
-      <InfiniteLoader
-        isItemLoaded={isItemLoaded}
-        itemCount={itemCount}
-        loadMoreItems={loadMoreItems}
-        threshold={5}
-      >
-        {({ onItemsRendered, ref }: any) => (
-          <VirtualList
-            ref={ref}
-            className="react-window-list"
-            height={height}
-            width="100%"
-            itemCount={itemCount}
-            itemSize={80}
-            itemData={itemData}
-            onItemsRendered={onItemsRendered}
-            overscanCount={5}
-          >
-            {DocumentItem}
-          </VirtualList>
-        )}
-      </InfiniteLoader>
-      
+    <Box sx={{ height: height, overflow: 'auto' }}>
+      <List>
+        {documents.map((document, index) => (
+          <DocumentItem
+            key={document.id}
+            document={document}
+            onDelete={onDelete}
+            onView={onView}
+            index={index}
+          />
+        ))}
+      </List>
       {isLoading && (
         <Box
           sx={{

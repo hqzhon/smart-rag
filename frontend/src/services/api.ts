@@ -249,9 +249,31 @@ export const documentApi = {
   },
 
   // 获取文档列表
-  getDocuments: async (sessionId?: string): Promise<DocumentInfo[]> => {
-    const url = sessionId ? `/documents?session_id=${sessionId}` : '/documents';
-    const response = await apiClient.get<DocumentInfo[]>(url);
+  getDocuments: async (params?: {
+    sessionId?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<{
+    documents: DocumentInfo[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+  }> => {
+    const searchParams = new URLSearchParams();
+    
+    if (params?.sessionId) {
+      searchParams.append('session_id', params.sessionId);
+    }
+    if (params?.page) {
+      searchParams.append('page', params.page.toString());
+    }
+    if (params?.page_size) {
+      searchParams.append('page_size', params.page_size.toString());
+    }
+    
+    const url = searchParams.toString() ? `/documents?${searchParams.toString()}` : '/documents';
+    const response = await apiClient.get(url);
     return response.data;
   },
 

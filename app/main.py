@@ -27,7 +27,7 @@ from app.services.chat_service import ChatService
 from app.services.search_service import SearchService
 from app.models.query_models import QueryRequest, QueryResponse
 from app.models.document_models import Document
-from app.api.v1 import chat, documents
+from app.api.v1 import chat, documents, document_progress
 
 # 设置日志
 logger = setup_logger(__name__)
@@ -160,6 +160,7 @@ app.add_middleware(
 # 注册API路由
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(documents.router, prefix="/api/v1", tags=["documents"])
+app.include_router(document_progress.router, prefix="/api/v1", tags=["document_progress"])
 
 # 后台清理任务
 async def cleanup_task():

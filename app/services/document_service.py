@@ -17,6 +17,7 @@ from app.embeddings.text_splitter import MedicalTextSplitter
 from app.utils.logger import setup_logger
 from app.storage.database import DatabaseManager
 from app.core.config import get_settings
+from app.core.redis_client import get_redis_client
 
 logger = setup_logger(__name__)
 
@@ -45,6 +46,9 @@ class DocumentService:
         # 延迟初始化重量级组件
         self.db_manager = None
         
+        # 初始化Redis客户端
+        self.redis_client = get_redis_client()
+        
         logger.info("文档服务基础初始化完成")
     
     async def async_init(self):
@@ -65,6 +69,43 @@ class DocumentService:
             return int(size_str[:-2]) * 1024 * 1024 * 1024
         else:
             return int(size_str)
+    
+    def _publish_progress(self, document_id: str, status: str, progress: int = 0, message: str = ""):
+        """发布文档处理进度到Redis
+        
+        支持的状态值包括:
+        - uploading: 文件上传中
+        - processing: 文档处理中
+        - parsed: 文档解析完成
+        - chunking: 文本分块中
+        - chunked: 文本分块完成
+        - saved_content: 内容已保存
+        - vectorizing: 向量化处理中
+        - vectorized: 向量化完成
+        - completed: 处理完成
+        - failed: 处理失败
+        - error: 发生错误
+        - ready: 文档就绪
+        - chat_ready: 可用于聊天
+        - generating_metadata: 生成元数据中
+        - uploaded: 上传完成
+        - connected: SSE连接建立
+        - heartbeat: 心跳信号
+        - timeout: 超时
+        """
+        try:
+            channel = f"document_progress_{document_id}"
+            progress_data = {
+                "document_id": document_id,
+                "status": status,
+                "progress": progress,
+                "message": message,
+                "timestamp": datetime.now().isoformat()
+            }
+            self.redis_client.publish(channel, progress_data)
+            logger.debug(f"Progress published for {document_id}: {status} ({progress}%)")
+        except Exception as e:
+            logger.error(f"Failed to publish progress for {document_id}: {e}")
     
     async def upload_document(self, file_content: bytes, filename: str, content_type: str) -> Document:
         """上传文档
@@ -100,8 +141,12 @@ class DocumentService:
                 content_type=content_type,
                 upload_time=datetime.now(),
                 processed=False,
-                processing_status="uploaded"
+                processing_status="uploaded",
+                status="uploading"  # 设置初始状态为uploading
             )
+            
+            # 发布上传完成进度
+            self._publish_progress(document_id, "uploaded", 10, "文件上传完成")
             
             # 立即保存基础文档信息到MySQL数据库
             try:
@@ -112,6 +157,7 @@ class DocumentService:
                     'file_path': file_path,
                     'file_size': len(file_content),
                     'file_type': content_type,
+                    'status': 'uploading',  # 设置初始状态
                     'metadata': {
                         'original_filename': filename,
                         'processing_status': 'uploaded',
@@ -122,6 +168,9 @@ class DocumentService:
                 
                 self.db_manager.save_document(doc_data)
                 logger.info(f"基础文档信息已保存到数据库: {document_id}")
+                
+                # 发布数据库保存完成进度
+                self._publish_progress(document_id, "saved", 20, "文档信息已保存")
                 
             except Exception as db_error:
                 # 如果数据库保存失败，删除已保存的文件并抛出异常
@@ -171,10 +220,19 @@ class DocumentService:
             
             # 更新处理状态
             document.processing_status = "processing"
+            document.status = "processing"  # 更新整体状态为processing
+            
+            # 更新数据库中的状态
+            self.db_manager.update_document(document.id, {'status': 'processing'})
+            
+            # 发布开始处理进度
+            self._publish_progress(document.id, "processing", 30, "开始处理文档内容")
             
             # 使用MultiFormatProcessor处理文档
             try:
                 result = await self.multi_format_processor.process_document_async(document.file_path)
+                # 发布文档解析完成进度
+                self._publish_progress(document.id, "parsed", 50, "文档内容解析完成")
             except ProcessingError as e:
                 logger.error(f"多格式处理器处理失败: {str(e)}")
                 # 回退到原始处理器（仅支持PDF）
@@ -183,10 +241,13 @@ class DocumentService:
                     result = await asyncio.get_event_loop().run_in_executor(
                         None, self.document_processor.process_single_document, document.file_path
                     )
+                    # 发布文档解析完成进度
+                    self._publish_progress(document.id, "parsed", 50, "文档内容解析完成")
                 else:
                     raise e
             
             # 文本分块 - 转换为text_splitter期望的格式
+            self._publish_progress(document.id, "chunking", 60, "开始文本分块")
             document_for_splitting = {
                 "text": result.get("text", result.get("standardized_text", result.get("cleaned_text", result.get("raw_text", "")))),
                 "filename": document.filename,
@@ -194,6 +255,7 @@ class DocumentService:
                 "references": result.get("references", result.get("metadata", {}).get("references", []))
             }
             chunks = self.text_splitter.split_documents([document_for_splitting])
+            self._publish_progress(document.id, "chunked", 70, f"文本分块完成，共{len(chunks)}个块")
             
             # 获取提取的标题
             document_title = result.get('title', document.filename)
@@ -246,12 +308,16 @@ class DocumentService:
                 }
                 
                 # 更新数据库中的文档信息（包含处理后的内容）
+                doc_data['status'] = 'processing'  # 设置状态为processing
                 self.db_manager.save_document(doc_data)
                 logger.info(f"文档内容已更新到数据库: {document.id}")
+                self._publish_progress(document.id, "saved_content", 80, "文档内容已保存到数据库")
                 
                 # 进行向量化处理
+                self._publish_progress(document.id, "vectorizing", 85, "开始向量化处理")
                 await self._vectorize_document_chunks(document.id, document, chunks, document_title)
                 logger.info(f"文档向量化完成: {document.id}")
+                self._publish_progress(document.id, "vectorized", 95, "向量化处理完成")
                 
                 # 向量化成功后，更新向量化状态
                 vectorization_update = {
@@ -269,6 +335,7 @@ class DocumentService:
                 self.db_manager.update_document(document.id, {
                     'vectorized': True,
                     'vectorization_status': 'completed',
+                    'status': 'chat_ready',  # 向量化完成后设置为chat_ready状态
                     'metadata': doc_data['metadata']
                 })
                 
@@ -277,11 +344,15 @@ class DocumentService:
             except Exception as transaction_error:
                 logger.error(f"文档处理事务失败: {str(transaction_error)}")
                 
+                # 发布错误进度
+                self._publish_progress(document.id, "error", 0, f"处理失败: {str(transaction_error)}")
+                
                 # 回滚：更新数据库状态为失败
                 try:
                     self.db_manager.update_document(document.id, {
                         'vectorized': False,
                         'vectorization_status': 'failed',
+                        'status': 'failed',  # 设置整体状态为failed
                         'metadata': {
                             'processing_status': 'failed',
                             'error_message': str(transaction_error),
@@ -299,6 +370,10 @@ class DocumentService:
             # 更新文档状态
             document.processed = True
             document.processing_status = "completed"
+            document.status = "chat_ready"  # 设置最终状态为chat_ready
+            
+            # 发布完成进度
+            self._publish_progress(document.id, "chat_ready", 100, f"文档处理完成，耗时{processing_time:.1f}秒")
             
             # 创建处理结果
             processing_result = ProcessingResult(
@@ -319,6 +394,25 @@ class DocumentService:
             logger.error(f"文档处理失败: {str(e)}")
             document.processing_status = "failed"
             document.error_message = str(e)
+            
+            # 更新数据库中的状态为失败
+            try:
+                self.db_manager.update_document(document.id, {
+                    'processed': False,
+                    'processing_status': 'failed',
+                    'status': 'failed',  # 设置整体状态为failed
+                    'metadata': {
+                        'processing_status': 'failed',
+                        'error_message': str(e),
+                        'vectorized': False,
+                        'vectorization_status': 'failed'
+                    }
+                })
+            except Exception as db_error:
+                logger.error(f"更新文档失败状态时出错: {str(db_error)}")
+            
+            # 发布处理失败进度
+            self._publish_progress(document.id, "failed", 0, f"文档处理失败: {str(e)}")
             
             return ProcessingResult(
                 document_id=document.id,
@@ -462,20 +556,22 @@ class DocumentService:
         
         logger.warning(f"文档删除回滚完成: {document_id}")
     
-    async def list_documents(self, limit: int = 10, offset: int = 0) -> List[Document]:
-        """获取文档列表
+    async def list_documents(self, limit: int = 10, offset: int = 0) -> Dict[str, Any]:
+        """获取文档列表（支持分页）
         
         Args:
             limit: 限制数量
             offset: 偏移量
             
         Returns:
-            文档列表
+            包含文档列表和分页信息的字典
         """
         try:
-            docs_data = self.db_manager.list_documents(limit=limit)
-            documents = []
+            # 调用数据库方法获取分页数据
+            result = self.db_manager.list_documents(limit=limit, offset=offset)
+            docs_data = result['documents']
             
+            documents = []
             for doc_data in docs_data:
                 document = Document(
                     id=doc_data['id'],
@@ -485,14 +581,28 @@ class DocumentService:
                     content_type=doc_data.get('file_type', ''),
                     upload_time=doc_data.get('created_at', datetime.now()),
                     processed=True,
-                    processing_status="completed"
+                    processing_status="completed",
+                    status=doc_data.get('status', 'ready')  # 添加status字段
                 )
                 documents.append(document)
             
-            return documents
+            # 返回完整的分页信息
+            return {
+                'documents': documents,
+                'total': result['total'],
+                'page': result['page'],
+                'page_size': result['page_size'],
+                'total_pages': result['total_pages']
+            }
         except Exception as e:
             logger.error(f"获取文档列表失败: {str(e)}")
-            return []
+            return {
+                'documents': [],
+                'total': 0,
+                'page': 1,
+                'page_size': limit,
+                'total_pages': 0
+            }
     
     def get_supported_formats(self) -> List[str]:
         """获取支持的文件格式"""

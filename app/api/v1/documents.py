@@ -30,6 +30,7 @@ router = APIRouter()
 class DocumentUploadResponse(BaseModel):
     """文档上传响应模型"""
     session_id: str
+    document_id: str  # 添加document_id字段
     status: str
     filename: str
     message: str
@@ -108,6 +109,7 @@ async def upload_document(
         
         return DocumentUploadResponse(
             session_id=session_id,
+            document_id=document.id,  # 返回真实的document_id
             status="uploaded",
             filename=document.filename,
             message="文件上传成功，正在处理中..."
@@ -153,27 +155,49 @@ async def get_supported_formats():
 
 
 @router.get("/documents")
-async def get_documents():
-    """获取所有文档列表"""
-    from app.storage.database import get_db_manager
-    db = get_db_manager()
+async def get_documents(page: int = 1, page_size: int = 10):
+    """获取文档列表（支持分页）
     
+    Args:
+        page: 页码，从1开始
+        page_size: 每页数量，默认10条
+    """
     try:
-        documents = db.list_documents(limit=100)
+        # 获取文档服务实例
+        document_service = get_document_service()
+        
+        # 计算偏移量
+        offset = (page - 1) * page_size
+        
+        # 通过DocumentService获取分页数据
+        result_data = await document_service.list_documents(limit=page_size, offset=offset)
+        documents = result_data['documents']
         
         # 转换为前端需要的格式
         result = []
         for doc in documents:
             result.append({
-                "id": doc["id"],
-                "name": doc["title"],
-                "size": doc["file_size"] or 0,
-                "uploadTime": doc["created_at"].isoformat() if doc["created_at"] else None,
-                "type": doc["file_type"] or "pdf"
+                "id": doc.id,
+                "name": doc.filename,
+                "size": doc.file_size or 0,
+                "uploadTime": doc.upload_time.isoformat() if doc.upload_time else None,
+                "type": doc.content_type or "application/pdf",
+                "status": getattr(doc, 'status', 'ready')  # 添加status字段，默认为ready
             })
         
-        logger.info(f"获取文档列表成功，共 {len(result)} 个文档")
-        return result
+        # 构建返回数据
+        response_data = {
+            "documents": result,
+            "total": result_data['total'],
+            "page": result_data['page'],
+            "page_size": result_data['page_size'],
+            "total_pages": result_data['total_pages']
+        }
+        
+        logger.info(f"获取文档列表成功，第{page}页，共 {len(result)} 个文档，返回数据类型: {type(response_data)}")
+        logger.debug(f"返回数据结构: {list(response_data.keys())}")
+        
+        return response_data
         
     except Exception as e:
         logger.error(f"获取文档列表时出错: {str(e)}")
@@ -199,7 +223,7 @@ async def get_document(document_id: str):
             "file_type": document["file_type"],
             "file_size": document["file_size"],
             "created_at": document["created_at"],
-            "status": "active"
+            "status": document.get("status", "ready")  # 从数据库获取status字段，默认为ready
         }
     except Exception as e:
         logger.error(f"获取文档失败: {str(e)}")

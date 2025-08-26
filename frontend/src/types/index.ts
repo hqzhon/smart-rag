@@ -176,7 +176,7 @@ export interface DocumentInfo {
   document_id?: string;
   session_id?: string;
   filename?: string;
-  status?: 'processing' | 'completed' | 'error' | 'uploaded' | 'vectorizing' | 'generating_metadata' | 'chat_ready';
+  status?: 'uploading' | 'processing' | 'completed' | 'failed' | 'ready' | 'chat_ready' | 'generating_metadata' | 'vectorizing' | 'uploaded' | 'error';  // 支持所有状态值
   chunks?: number;
   message?: string;
   // 新增详细状态字段

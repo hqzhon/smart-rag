@@ -2,20 +2,27 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Typography,
-  Box,
   Paper,
-  Divider,
+  Box,
+  Button,
   Alert,
   Snackbar,
-  Fab,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button,
+  Fab,
+  Divider,
   Tabs,
   Tab,
+  Pagination,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  CircularProgress,
 } from '@mui/material';
+import { SelectChangeEvent } from '@mui/material/Select';
 import {
   Add as AddIcon,
   Refresh as RefreshIcon,
@@ -46,23 +53,63 @@ const FileManagementPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState(0);
+  
+  // 分页相关状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalDocuments, setTotalDocuments] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   // 加载文档列表
-  const loadDocuments = useCallback(async () => {
+  const loadDocuments = useCallback(async (page?: number, size?: number, retryCount = 0) => {
     setIsLoading(true);
     setError(null);
     
+    const targetPage = page || currentPage;
+    const targetSize = size || pageSize;
+    
     try {
-      const response = await documentApi.getDocuments();
-      setDocuments(response || []);
+      const response = await documentApi.getDocuments({
+        page: targetPage,
+        page_size: targetSize
+      });
+      
+      setDocuments(response.documents || []);
+      setTotalDocuments(response.total || 0);
+      setTotalPages(response.total_pages || 0);
+      setCurrentPage(response.page || targetPage);
+      setPageSize(response.page_size || targetSize);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '加载文档列表失败';
+      let errorMessage = '加载文档列表失败';
+      
+      if (err instanceof Error) {
+        // 网络错误处理
+        if (err.message.includes('Network Error') || err.message.includes('fetch')) {
+          errorMessage = '网络连接失败，请检查网络连接';
+        } else if (err.message.includes('timeout')) {
+          errorMessage = '请求超时，请稍后重试';
+        } else if (err.message.includes('500')) {
+          errorMessage = '服务器内部错误，请稍后重试';
+        } else if (err.message.includes('404')) {
+          errorMessage = '请求的资源不存在';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
       setError(errorMessage);
       console.error('Failed to load documents:', err);
+      
+      // 自动重试机制（最多重试2次）
+      if (retryCount < 2 && (errorMessage.includes('网络') || errorMessage.includes('超时'))) {
+        setTimeout(() => {
+          loadDocuments(page, size, retryCount + 1);
+        }, 1000 * (retryCount + 1)); // 递增延迟
+      }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentPage, pageSize]);
 
   // 页面加载时获取文档列表
   useEffect(() => {
@@ -95,24 +142,44 @@ const FileManagementPage: React.FC = () => {
   const confirmDeleteDocument = useCallback(async () => {
     if (!documentToDelete) return;
     
+    setIsLoading(true);
+    
     try {
       await documentApi.deleteDocument(documentToDelete);
       
-      // 从列表中移除已删除的文档
-      setDocuments(prev => prev.filter(doc => doc.id !== documentToDelete));
-      
       setSnackbarMessage('文档删除成功');
       setSnackbarOpen(true);
+      
+      // 刷新当前页面的文档列表
+      loadDocuments();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '删除文档失败';
+      let errorMessage = '删除文档失败';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Network Error') || err.message.includes('fetch')) {
+          errorMessage = '网络连接失败，删除操作未完成';
+        } else if (err.message.includes('timeout')) {
+          errorMessage = '请求超时，请重试删除操作';
+        } else if (err.message.includes('404')) {
+          errorMessage = '文档不存在或已被删除';
+        } else if (err.message.includes('403')) {
+          errorMessage = '没有权限删除此文档';
+        } else if (err.message.includes('500')) {
+          errorMessage = '服务器错误，请稍后重试';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
       setSnackbarMessage(errorMessage);
       setSnackbarOpen(true);
       console.error('Failed to delete document:', err);
     } finally {
+      setIsLoading(false);
       setDeleteDialogOpen(false);
       setDocumentToDelete(null);
     }
-  }, [documentToDelete]);
+  }, [documentToDelete, loadDocuments]);
 
   // 处理查看文档
   const handleViewDocument = useCallback((document: Document) => {
@@ -127,6 +194,20 @@ const FileManagementPage: React.FC = () => {
     // 暂时不实现分页加载
     return Promise.resolve();
   }, []);
+
+  // 处理分页变更
+  const handlePageChange = useCallback((event: React.ChangeEvent<unknown>, page: number) => {
+    setCurrentPage(page);
+    loadDocuments(page, pageSize);
+  }, [loadDocuments, pageSize]);
+
+  // 处理每页条数变更
+  const handlePageSizeChange = useCallback((event: SelectChangeEvent<number>) => {
+    const newPageSize = event.target.value as number;
+    setPageSize(newPageSize);
+    setCurrentPage(1); // 重置到第一页
+    loadDocuments(1, newPageSize);
+  }, [loadDocuments]);
 
   // 处理标签页切换
   const handleTabChange = useCallback((event: React.SyntheticEvent, newValue: number) => {
@@ -158,14 +239,27 @@ const FileManagementPage: React.FC = () => {
             <>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Typography variant="h6" component="h2">
-                  文档列表 ({documents.length})
+                  文档列表 (共 {totalDocuments} 条)
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel>每页条数</InputLabel>
+                    <Select
+                      value={pageSize}
+                      label="每页条数"
+                      onChange={handlePageSizeChange}
+                    >
+                      <MenuItem value={5}>5条</MenuItem>
+                      <MenuItem value={10}>10条</MenuItem>
+                      <MenuItem value={20}>20条</MenuItem>
+                      <MenuItem value={50}>50条</MenuItem>
+                    </Select>
+                  </FormControl>
                   <HoverAnimatedBox hoverAnimation="scale">
                     <AccessibleButton
                       variant="outlined"
                       startIcon={<RefreshIcon />}
-                      onClick={loadDocuments}
+                      onClick={() => loadDocuments()}
                       disabled={isLoading}
                       size="small"
                     >
@@ -189,7 +283,20 @@ const FileManagementPage: React.FC = () => {
               
               {error && (
                 <AnimatedBox animation="fadeInUp">
-                  <Alert severity="error" sx={{ mb: 2 }}>
+                  <Alert 
+                    severity="error" 
+                    sx={{ mb: 2 }}
+                    action={
+                      <Button 
+                        color="inherit" 
+                        size="small" 
+                        onClick={() => loadDocuments()}
+                        disabled={isLoading}
+                      >
+                        重试
+                      </Button>
+                    }
+                  >
                     {error}
                   </Alert>
                 </AnimatedBox>
@@ -206,6 +313,21 @@ const FileManagementPage: React.FC = () => {
                   height={500}
                 />
               </Box>
+              
+              {/* 分页控件 */}
+              {totalPages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                  <Pagination
+                    count={totalPages}
+                    page={currentPage}
+                    onChange={handlePageChange}
+                    color="primary"
+                    size="large"
+                    showFirstButton
+                    showLastButton
+                  />
+                </Box>
+              )}
             </>
           )}
           
@@ -238,10 +360,21 @@ const FileManagementPage: React.FC = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>取消</Button>
-          <Button onClick={confirmDeleteDocument} color="error" variant="contained">
-            删除
+          <Button 
+            onClick={() => setDeleteDialogOpen(false)} 
+            disabled={isLoading}
+          >
+            取消
           </Button>
+          <Button 
+             onClick={confirmDeleteDocument} 
+             color="error" 
+             variant="contained"
+             disabled={isLoading}
+             startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : undefined}
+           >
+             {isLoading ? '删除中...' : '删除'}
+           </Button>
         </DialogActions>
       </Dialog>
 
