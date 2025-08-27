@@ -415,6 +415,16 @@ class AsyncMetadataProcessor:
                 try:
                     # 处理任务
                     result = await self._process_task(task, worker_name)
+
+                    # [BUG FIX] 将生成的元数据更新回ChromaDB
+                    if result:
+                        try:
+                            logger.debug(f"准备将元数据更新到ChromaDB - ID: {task.task_id}")
+                            await self.update_chunk_in_chroma(task.chunk_id, result)
+                        except Exception as update_exc:
+                            logger.error(f"更新ChromaDB失败 - ID: {task.task_id}, 错误: {update_exc}")
+                            # 如果更新失败，可以选择重新抛出异常以触发重试逻辑
+                            # raise update_exc
                     
                     # 更新任务结果
                     task.result = result
