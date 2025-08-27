@@ -102,9 +102,10 @@ class HybridRetriever:
             logger.info(f"第一阶段召回 {len(candidate_chunks)} 个候选文档块。")
 
             # --- 第二阶段：并行精排与融合 ---
-            # 1. BM25精排
+            # 1. BM25精排 - 基于keywords字段建立索引
             bm25_retriever = RankBM25Retriever(candidate_chunks)
             bm25_scores = bm25_retriever.get_scores(query)
+            logger.debug(f"BM25检索完成，基于keywords字段计算了 {len(bm25_scores)} 个文档的分数")
 
             # 2. 向量精排
             candidate_contents = [chunk['content'] for chunk in candidate_chunks]
