@@ -180,6 +180,34 @@ class VectorStore(metaclass=SingletonMeta):
             logger.error(f"删除文档向量数据时出错: {str(e)}")
             return False
     
+    async def get_document_chunks(self, document_id: str) -> List[Dict[str, Any]]:
+        """获取文档的所有chunks
+        
+        Args:
+            document_id: 文档ID
+            
+        Returns:
+            文档chunks列表
+        """
+        try:
+            results = self.collection.get(where={"document_id": document_id})
+            
+            documents = []
+            if results and results.get('documents'):
+                for i, doc_content in enumerate(results['documents']):
+                    documents.append({
+                        'content': doc_content,
+                        'metadata': results['metadatas'][i] if results.get('metadatas') and i < len(results['metadatas']) else {},
+                        'score': 1.0  # 直接获取的数据，设置满分
+                    })
+            
+            logger.info(f"获取文档 {document_id} 的 {len(documents)} 个chunks")
+            return documents
+            
+        except Exception as e:
+            logger.error(f"获取文档chunks时出错: {str(e)}")
+            return []
+    
     async def update_document(self, ids: List[str], metadatas: List[Dict[str, Any]]) -> bool:
         """更新文档元数据
         
@@ -230,6 +258,31 @@ class VectorStoreRetriever:
         )
         
         return [{'page_content': r['content'], 'metadata': r['metadata']} for r in results]
+
+
+# 全局向量存储实例
+_vector_store_instance = None
+
+def get_vector_store() -> VectorStore:
+    """获取向量存储实例（单例模式）
+    
+    Returns:
+        VectorStore: 向量存储实例
+    """
+    global _vector_store_instance
+    if _vector_store_instance is None:
+        _vector_store_instance = VectorStore()
+    return _vector_store_instance
+
+async def get_vector_store_async() -> VectorStore:
+    """获取已初始化的向量存储实例（异步）
+    
+    Returns:
+        VectorStore: 已初始化的向量存储实例
+    """
+    vector_store = get_vector_store()
+    await vector_store.async_init()
+    return vector_store
 
 
 class MockCollection:

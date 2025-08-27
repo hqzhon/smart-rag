@@ -11,6 +11,7 @@ import ChatPage from '@/pages/ChatPage';
 import TestUpload from '@/pages/TestUpload';
 import FileManagementPage from '@/pages/FileManagementPage';
 import HistoryPage from '@/pages/HistoryPage';
+import DocumentPreviewPage from '@/pages/DocumentPreviewPage';
 
 import Navigation from '@/components/Navigation';
 import { useChatStore } from '@/stores/chatStore';
@@ -44,6 +45,7 @@ const AnimatedRoutes: React.FC = () => {
             <Route path="/chat/:sessionId?" element={<ChatPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/test-upload" element={<TestUpload />} />
+            <Route path="/documents/:documentId/preview" element={<DocumentPreviewPage />} />
 
           </Routes>
         </Box>

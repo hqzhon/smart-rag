@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -181,13 +182,14 @@ const FileManagementPage: React.FC = () => {
     }
   }, [documentToDelete, loadDocuments]);
 
+  const navigate = useNavigate();
+
   // 处理查看文档
   const handleViewDocument = useCallback((document: Document) => {
     console.log('View document:', document);
-    // TODO: 实现文档预览功能
-    setSnackbarMessage('文档预览功能开发中');
-    setSnackbarOpen(true);
-  }, []);
+    // 导航到文档预览页面
+    navigate(`/documents/${document.id}/preview`);
+  }, [navigate]);
 
   // 处理加载更多（暂时不需要分页）
   const handleLoadMore = useCallback(async (startIndex: number, stopIndex: number) => {

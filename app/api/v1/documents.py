@@ -5,8 +5,8 @@
 import os
 import uuid
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, UploadFile, File, BackgroundTasks, HTTPException, Query
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import logging
 
@@ -354,21 +354,24 @@ async def get_document_status(document_id: str):
         if not document:
             raise HTTPException(status_code=404, detail="文档不存在")
         
+        # 从metadata中获取详细信息
+        metadata = document.get('metadata', {}) or {}
+        
         return DocumentStatusResponse(
             document_id=document_id,
-            filename=document["filename"] or "",
-            file_format=document["file_format"] or "unknown",
+            filename=document["title"] or "",
+            file_format=metadata.get("file_format", "unknown"),
             file_size=document["file_size"] or 0,
-            processing_status=document["processing_status"] or "unknown",
+            processing_status=metadata.get("processing_status", "unknown"),
             vectorization_status=document["vectorization_status"] or "unknown",
-            metadata_generation_status=document["metadata_generation_status"] or "unknown",
-            processing_start_time=document["processing_start_time"].isoformat() if document.get("processing_start_time") else None,
-            processing_end_time=document["processing_end_time"].isoformat() if document.get("processing_end_time") else None,
-            total_pages=document.get("total_pages"),
-            total_sheets=document.get("total_sheets"),
-            total_slides=document.get("total_slides"),
-            element_types=document.get("element_types"),
-            error_message=document.get("error_message")
+            metadata_generation_status=metadata.get("metadata_generation_status", "unknown"),
+            processing_start_time=metadata.get("processing_start_time"),
+            processing_end_time=metadata.get("processing_end_time"),
+            total_pages=metadata.get("total_pages"),
+            total_sheets=metadata.get("total_sheets"),
+            total_slides=metadata.get("total_slides"),
+            element_types=metadata.get("element_types"),
+            error_message=metadata.get("error_message")
         )
         
     except HTTPException:
@@ -475,3 +478,147 @@ async def get_processing_stats():
     except Exception as e:
         logger.error(f"获取处理统计失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取处理统计失败: {str(e)}")
+
+
+@router.get("/documents/{document_id}/download")
+async def download_document(document_id: str):
+    """下载PDF原始文件"""
+    try:
+        from app.storage.database import get_db_manager
+        db = get_db_manager()
+        
+        # 获取文档信息
+        document = db.get_document(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        
+        # 获取文件路径
+        file_path = document.get("file_path")
+        if not file_path or not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="文件不存在或已被删除")
+        
+        # 获取文件名
+        filename = document.get("filename", "document.pdf")
+        
+        # 返回文件
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type="application/octet-stream"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"下载文档失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"下载文档失败: {str(e)}")
+
+
+@router.get("/documents/{document_id}/raw")
+async def get_document_raw(document_id: str):
+    """获取PDF原始文件的二进制流，供前端react-pdf加载"""
+    try:
+        from app.storage.database import get_db_manager
+        db = get_db_manager()
+        
+        # 获取文档信息
+        document = db.get_document(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        
+        # 获取文件路径
+        file_path = document.get("file_path")
+        if not file_path or not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="文件不存在或已被删除")
+        
+        # 检查是否为PDF文件
+        if not file_path.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="只支持PDF文件预览")
+        
+        # 返回PDF文件流
+        return FileResponse(
+            path=file_path,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "inline"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取PDF原始文件失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取PDF原始文件失败: {str(e)}")
+
+
+@router.get("/documents/{document_id}/chunks")
+async def get_document_chunks(document_id: str, page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=200)):
+    """获取文档的分块信息"""
+    try:
+        from app.storage.database import get_db_manager
+        from app.storage.vector_store import get_vector_store_async
+        
+        db = get_db_manager()
+        vector_store = await get_vector_store_async()
+        
+        # 验证文档是否存在
+        document = db.get_document(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        
+        # 从向量数据库获取文档的所有分块
+        try:
+            # 使用新的get_document_chunks方法
+            chunks_data = await vector_store.get_document_chunks(document_id)
+            
+            # 转换为更友好的格式
+            chunks = []
+            for chunk_data in chunks_data:
+                chunk_info = {
+                    "chunk_id": chunk_data["metadata"].get("chunk_id", ""),
+                    "chunk_index": chunk_data["metadata"].get("chunk_index", 0),
+                    "content": chunk_data["content"],
+                    "chunk_type": chunk_data["metadata"].get("chunk_type", "text"),
+                    "page_number": chunk_data["metadata"].get("page_number"),
+                    "metadata": {
+                        k: v for k, v in chunk_data["metadata"].items() 
+                        if k not in ["chunk_id", "chunk_index", "chunk_type", "page_number", "document_id"]
+                    }
+                }
+                chunks.append(chunk_info)
+            
+            # 按chunk_index排序
+            chunks.sort(key=lambda x: x.get("chunk_index", 0))
+            
+            # 分页处理
+            total_chunks = len(chunks)
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            paginated_chunks = chunks[start_idx:end_idx]
+            
+            return {
+                "status": "success",
+                "document_id": document_id,
+                "total_chunks": total_chunks,
+                "page": page,
+                "limit": limit,
+                "total_pages": (total_chunks + limit - 1) // limit,
+                "chunks": paginated_chunks
+            }
+            
+        except Exception as ve:
+            logger.warning(f"从向量数据库获取分块失败: {str(ve)}，返回空结果")
+            return {
+                "status": "success",
+                "document_id": document_id,
+                "total_chunks": 0,
+                "page": page,
+                "limit": limit,
+                "total_pages": 0,
+                "chunks": [],
+                "message": "文档尚未完成分块处理或分块数据不可用"
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取文档分块失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取文档分块失败: {str(e)}")
