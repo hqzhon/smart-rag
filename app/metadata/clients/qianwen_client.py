@@ -55,14 +55,26 @@ class QianwenClient:
     
     async def __aenter__(self):
         """异步上下文管理器入口"""
-        if self.connector is None:
-            self.connector = aiohttp.TCPConnector(
-                limit=20,
-                limit_per_host=5,
-                ttl_dns_cache=300,
-                use_dns_cache=True,
-                keepalive_timeout=30
-            )
+        # 每次都重新创建connector和session，避免事件循环冲突
+        if self.connector:
+            try:
+                await self.connector.close()
+            except:
+                pass
+        
+        self.connector = aiohttp.TCPConnector(
+            limit=20,
+            limit_per_host=5,
+            ttl_dns_cache=300,
+            use_dns_cache=True,
+            keepalive_timeout=30
+        )
+        
+        if self.session and not self.session.closed:
+            try:
+                await self.session.close()
+            except:
+                pass
         
         self.session = aiohttp.ClientSession(
             connector=self.connector,
@@ -298,18 +310,32 @@ async def get_metadata_qianwen_client() -> QianwenClient:
     # 检查现有客户端是否有效
     if thread_id in _metadata_qianwen_clients:
         client = _metadata_qianwen_clients[thread_id]
-        if hasattr(client, 'session') and client.session and not client.session.closed:
-            return client
-        else:
-            # 会话已关闭，清理并重新创建
-            try:
-                await client.__aexit__(None, None, None)
-            except:
-                pass
-            del _metadata_qianwen_clients[thread_id]
+        # 检查会话是否仍然有效，以及是否在同一个事件循环中
+        try:
+            current_loop = asyncio.get_running_loop()
+            if (hasattr(client, 'session') and client.session and 
+                not client.session.closed and 
+                hasattr(client, '_loop') and client._loop == current_loop):
+                return client
+        except RuntimeError:
+            # 没有运行中的事件循环
+            pass
+        
+        # 会话已关闭或事件循环不匹配，清理并重新创建
+        try:
+            await client.__aexit__(None, None, None)
+        except:
+            pass
+        del _metadata_qianwen_clients[thread_id]
     
     # 创建新的客户端实例
     client = QianwenClient()
+    # 记录当前事件循环
+    try:
+        client._loop = asyncio.get_running_loop()
+    except RuntimeError:
+        client._loop = None
+    
     _metadata_qianwen_clients[thread_id] = client
     return client
 

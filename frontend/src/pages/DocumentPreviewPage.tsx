@@ -37,7 +37,10 @@ interface DocumentChunk {
   content: string;
   chunk_type: string;
   page_number?: number | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, any> & {
+    keywords?: string[];
+    summary?: string;
+  };
 }
 
 interface ChunksResponse {
@@ -357,11 +360,6 @@ const DocumentPreviewPage: React.FC = () => {
             文档分块信息
           </Typography>
           
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <Typography variant="body2">
-              💡 当前版本支持分块内容查看。联动高亮功能需要后端提供页码和坐标信息。
-            </Typography>
-          </Alert>
           
           {chunksLoading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -383,9 +381,9 @@ const DocumentPreviewPage: React.FC = () => {
               
               <List sx={{ flex: 1, overflow: 'auto' }}>
                 {chunks.map((chunk, index) => (
-                  <ListItem key={chunk.chunk_id} disablePadding>
+                  <ListItem key={`${chunk.chunk_id}-${chunk.chunk_index}`} disablePadding>
                     <ListItemButton
-                      selected={selectedChunk?.chunk_id === chunk.chunk_id}
+                      selected={selectedChunk?.chunk_id === chunk.chunk_id && selectedChunk?.chunk_index === chunk.chunk_index}
                       onClick={() => handleChunkSelect(chunk)}
                       sx={{ 
                         border: 1, 
@@ -483,21 +481,85 @@ const DocumentPreviewPage: React.FC = () => {
             {selectedChunk.content}
           </Typography>
           
-          {Object.keys(selectedChunk.metadata).length > 0 && (
+          {/* 关键词展示 */}
+          {selectedChunk.metadata.keywords && typeof selectedChunk.metadata.keywords === 'string' && (selectedChunk.metadata.keywords as string).trim() && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                关键词
+              </Typography>
+              <Paper 
+                sx={{ 
+                  p: 2, 
+                  bgcolor: 'info.light', 
+                  border: '1px solid', 
+                  borderColor: 'info.main',
+                  borderRadius: 2
+                }}
+              >
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    lineHeight: 1.6,
+                    color: 'info.contrastText',
+                    fontWeight: 'medium'
+                  }}
+                >
+                  {selectedChunk.metadata.keywords}
+                </Typography>
+              </Paper>
+            </>
+          )}
+          
+          {/* 摘要展示 */}
+          {selectedChunk.metadata.summary && typeof selectedChunk.metadata.summary === 'string' && selectedChunk.metadata.summary.trim() && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                摘要
+              </Typography>
+              <Paper 
+                sx={{ 
+                  p: 2, 
+                  bgcolor: 'grey.50', 
+                  border: '1px solid', 
+                  borderColor: 'grey.300',
+                  borderRadius: 2
+                }}
+              >
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    lineHeight: 1.6,
+                    color: 'text.secondary',
+                    fontStyle: 'italic'
+                  }}
+                >
+                  {selectedChunk.metadata.summary}
+                </Typography>
+              </Paper>
+            </>
+          )}
+          
+          {/* 其他元数据 */}
+          {Object.keys(selectedChunk.metadata).filter(key => key !== 'keywords' && key !== 'summary').length > 0 && (
             <>
               <Divider sx={{ my: 2 }} />
               <Typography variant="subtitle2" gutterBottom>
-                元数据
+                其他元数据
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                {Object.entries(selectedChunk.metadata).map(([key, value]) => (
-                  <Chip 
-                    key={key} 
-                    label={`${key}: ${value}`} 
-                    variant="outlined" 
-                    size="small"
-                  />
-                ))}
+                {Object.entries(selectedChunk.metadata)
+                  .filter(([key]) => key !== 'keywords' && key !== 'summary')
+                  .map(([key, value]) => (
+                    <Chip 
+                      key={key} 
+                      label={`${key}: ${value}`} 
+                      variant="outlined" 
+                      size="small"
+                    />
+                  ))
+                }
               </Box>
             </>
           )}
