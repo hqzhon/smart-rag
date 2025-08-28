@@ -36,6 +36,7 @@ import {
   Refresh as RetryIcon,
   FileUpload as DragIcon,
   Speed as ProcessingIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { keyframes } from '@mui/system';
 
@@ -111,7 +112,7 @@ interface FileWithStatus {
   type: string;
   lastModified: number;
   originalFile: File;
-  status: 'pending' | 'uploading' | 'processing' | 'completed' | 'error' | 'uploaded' | 'vectorizing' | 'generating_metadata' | 'chat_ready';
+  status: 'pending' | 'uploading' | 'connected' | 'parsed' | 'chunking' | 'chunked' | 'saved_content' | 'processing' | 'vectorizing' | 'vectorized' | 'generating_metadata' | 'completed' | 'error' | 'uploaded' | 'chat_ready';
   progress: number;
   error?: string;
   uploadResponse?: any;
@@ -441,8 +442,40 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                 updatedFile.status = data.status;
               }
               
-              if (data.progress !== undefined) {
-                updatedFile.progress = Math.max(0, Math.min(100, data.progress));
+              // Map status to progress instead of using backend progress directly
+              // This ensures consistent progress display regardless of backend progress values
+              const getProgressByStatus = (status: string) => {
+                switch (status) {
+                  case 'connected':
+                    return 5;
+                  case 'parsed':
+                    return 25;
+                  case 'chunking':
+                    return 40;
+                  case 'chunked':
+                    return 55;
+                  case 'saved_content':
+                    return 70;
+                  case 'vectorizing':
+                    return 80;
+                  case 'vectorized':
+                    return 95;
+                  case 'chat_ready':
+                  case 'completed':
+                    return 100;
+                  case 'processing':
+                    return Math.max(updatedFile.progress || 10, 15); // Keep current progress or minimum 15%
+                  case 'uploading':
+                    return Math.max(updatedFile.progress || 0, 5); // Keep current progress or minimum 5%
+                  default:
+                    return updatedFile.progress || 0;
+                }
+              };
+              
+              // Update progress based on status
+              if (data.status) {
+                const newProgress = getProgressByStatus(data.status);
+                updatedFile.progress = Math.max(updatedFile.progress || 0, newProgress);
               }
               
               // Handle error status and messages
@@ -649,10 +682,22 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         return '等待上传';
       case 'uploading':
         return '上传中';
+      case 'connected':
+        return '连接中';
+      case 'parsed':
+        return '解析完成';
+      case 'chunking':
+        return '分块中';
+      case 'chunked':
+        return '分块完成';
+      case 'saved_content':
+        return '内容已保存';
       case 'processing':
         return '处理中';
       case 'vectorizing':
         return '向量化中';
+      case 'vectorized':
+        return '向量化完成';
       case 'generating_metadata':
         return '生成元数据';
       case 'completed':
@@ -730,7 +775,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                           size="small"
                           sx={{ 
                             fontWeight: 500,
-                            animation: file.status === 'processing' || file.status === 'uploading' 
+                            animation: (file.status === 'uploading' || file.status === 'connected' || file.status === 'parsed' || file.status === 'chunking' || file.status === 'chunked' || file.status === 'saved_content' || file.status === 'processing' || file.status === 'vectorizing' || file.status === 'vectorized' || file.status === 'generating_metadata')
                               ? `${pulseAnimation} 2s infinite` 
                               : 'none'
                           }}
@@ -759,7 +804,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                         </Alert>
                       )}
                       
-                      {(file.status === 'uploading' || file.status === 'processing' || file.status === 'vectorizing' || file.status === 'generating_metadata') && (
+                      {(file.status === 'uploading' || file.status === 'connected' || file.status === 'parsed' || file.status === 'chunking' || file.status === 'chunked' || file.status === 'saved_content' || file.status === 'processing' || file.status === 'vectorizing' || file.status === 'vectorized' || file.status === 'generating_metadata') && (
                         <Box sx={{ mt: 1 }}>
                           <LinearProgress 
                             variant="determinate" 
@@ -814,13 +859,14 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
                       
                       <Tooltip title="删除">
                         <IconButton
+                          size="small"
                           onClick={() => removeFile(file.id)}
-                          disabled={file.status === 'uploading' || file.status === 'processing'}
-                          sx={{
-                            color: 'error.main',
+                          disabled={file.status === 'uploading' || file.status === 'connected' || file.status === 'parsed' || file.status === 'chunking' || file.status === 'chunked' || file.status === 'saved_content' || file.status === 'processing' || file.status === 'vectorizing' || file.status === 'vectorized' || file.status === 'generating_metadata'}
+                          sx={{ 
+                            color: 'text.secondary',
                             '&:hover': {
+                              color: 'error.main',
                               backgroundColor: 'error.light',
-                              color: 'error.contrastText',
                             }
                           }}
                         >
@@ -999,10 +1045,23 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
         color: 'white',
         display: 'flex',
         alignItems: 'center',
-        gap: 1
+        justifyContent: 'space-between'
       }}>
-        <UploadIcon />
-        文档上传
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <UploadIcon />
+          文档上传
+        </Box>
+        <IconButton
+          onClick={onClose}
+          sx={{
+            color: 'white',
+            '&:hover': {
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            }
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
       </DialogTitle>
       
       <DialogContent sx={{ p: 3, pt: 2 }}>
