@@ -464,8 +464,8 @@ const DocumentPreviewPage: React.FC = () => {
 
       {/* 选中分块的详细信息 */}
       {selectedChunk && (
-        <Paper sx={{ mt: 3, p: 3 }}>
-          <Typography variant="h6" gutterBottom>
+        <Paper sx={{ mt: 3, p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ color: 'primary.main', fontWeight: 'bold' }}>
             分块详情
           </Typography>
           
@@ -482,7 +482,10 @@ const DocumentPreviewPage: React.FC = () => {
           </Typography>
           
           {/* 关键词展示 */}
-          {selectedChunk.metadata.keywords && typeof selectedChunk.metadata.keywords === 'string' && (selectedChunk.metadata.keywords as string).trim() && (
+          {selectedChunk.metadata.keywords && (
+            (Array.isArray(selectedChunk.metadata.keywords) && selectedChunk.metadata.keywords.length > 0) ||
+            (typeof selectedChunk.metadata.keywords === 'string' && (selectedChunk.metadata.keywords as string).trim())
+          ) && (
             <>
               <Divider sx={{ my: 2 }} />
               <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
@@ -497,16 +500,33 @@ const DocumentPreviewPage: React.FC = () => {
                   borderRadius: 2
                 }}
               >
-                <Typography 
-                  variant="body2" 
-                  sx={{ 
-                    lineHeight: 1.6,
-                    color: 'info.contrastText',
-                    fontWeight: 'medium'
-                  }}
-                >
-                  {selectedChunk.metadata.keywords}
-                </Typography>
+                {Array.isArray(selectedChunk.metadata.keywords) ? (
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {selectedChunk.metadata.keywords.map((keyword, index) => (
+                      <Chip 
+                        key={index}
+                        label={keyword}
+                        size="small"
+                        sx={{ 
+                          bgcolor: 'info.main',
+                          color: 'info.contrastText',
+                          fontWeight: 'medium'
+                        }}
+                      />
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      lineHeight: 1.6,
+                      color: 'info.contrastText',
+                      fontWeight: 'medium'
+                    }}
+                  >
+                    {selectedChunk.metadata.keywords}
+                  </Typography>
+                )}
               </Paper>
             </>
           )}
@@ -521,9 +541,9 @@ const DocumentPreviewPage: React.FC = () => {
               <Paper 
                 sx={{ 
                   p: 2, 
-                  bgcolor: 'grey.50', 
+                  bgcolor: 'success.light', 
                   border: '1px solid', 
-                  borderColor: 'grey.300',
+                  borderColor: 'success.main',
                   borderRadius: 2
                 }}
               >
@@ -531,8 +551,8 @@ const DocumentPreviewPage: React.FC = () => {
                   variant="body2" 
                   sx={{ 
                     lineHeight: 1.6,
-                    color: 'text.secondary',
-                    fontStyle: 'italic'
+                    color: 'success.contrastText',
+                    fontWeight: 'medium'
                   }}
                 >
                   {selectedChunk.metadata.summary}

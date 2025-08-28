@@ -739,7 +739,31 @@ class DocumentService:
             # 添加到向量存储
             await vector_store.add_documents(formatted_documents)
             
-            logger.info(f"文档 {document_id} 的 {len(text_chunks)} 个文本块已成功向量化")
+            # 检查是否启用异步元数据处理
+            from app.core.config import get_settings
+            settings = get_settings()
+            
+            if getattr(settings, 'enable_async_metadata', True):
+                # 提交Celery任务生成关键词和摘要
+                from app.metadata.celery_tasks import generate_metadata_for_chunk
+                
+                for formatted_doc in formatted_documents:
+                    chunk_id = formatted_doc["metadata"]["chunk_id"]
+                    chunk_text = formatted_doc["content"]
+                    
+                    try:
+                        task = generate_metadata_for_chunk.delay(
+                            chunk_id,
+                            chunk_text,
+                            document_id
+                        )
+                        logger.debug(f"Celery任务已提交: chunk_id={chunk_id}, task_id={task.id}")
+                    except Exception as e:
+                        logger.error(f"提交Celery任务失败 chunk_id={chunk_id}: {e}")
+                
+                logger.info(f"文档 {document_id} 的 {len(text_chunks)} 个文本块已成功向量化，元数据生成任务已提交")
+            else:
+                logger.info(f"文档 {document_id} 的 {len(text_chunks)} 个文本块已成功向量化，异步元数据处理已禁用")
             
         except Exception as e:
             logger.error(f"向量化文档块时出错: {str(e)}")
