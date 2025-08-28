@@ -9,7 +9,6 @@ import time
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
-
 from app.models.document_models import Document, ProcessingResult
 from app.processors.document_processor import DocumentProcessor
 from app.services.multi_format_processor import MultiFormatProcessor, ProcessingError
@@ -228,22 +227,22 @@ class DocumentService:
             # 发布开始处理进度
             self._publish_progress(document.id, "processing", 30, "开始处理文档内容")
             
-            # 使用MultiFormatProcessor处理文档
+            # 使用DocumentProcessor处理文档（包含元数据处理）
             try:
-                result = await self.multi_format_processor.process_document_async(document.file_path)
+                logger.info(f"开始执行：process_single_document")
+                result = await self.document_processor.process_single_document(document.file_path, document.id)
                 # 发布文档解析完成进度
                 self._publish_progress(document.id, "parsed", 50, "文档内容解析完成")
-            except ProcessingError as e:
-                logger.error(f"多格式处理器处理失败: {str(e)}")
-                # 回退到原始处理器（仅支持PDF）
-                if document.file_path.lower().endswith('.pdf'):
-                    logger.info("回退到原始PDF处理器")
-                    result = await asyncio.get_event_loop().run_in_executor(
-                        None, self.document_processor.process_single_document, document.file_path
-                    )
+            except Exception as e:
+                logger.error(f"文档处理器处理失败: {str(e)}")
+                # 如果DocumentProcessor失败，尝试MultiFormatProcessor
+                try:
+                    logger.info("回退到多格式处理器")
+                    result = await self.multi_format_processor.process_document_async(document.file_path)
                     # 发布文档解析完成进度
                     self._publish_progress(document.id, "parsed", 50, "文档内容解析完成")
-                else:
+                except ProcessingError as fallback_error:
+                    logger.error(f"多格式处理器也失败: {str(fallback_error)}")
                     raise e
             
             # 文本分块 - 转换为text_splitter期望的格式

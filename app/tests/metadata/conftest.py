@@ -17,7 +17,7 @@ from app.metadata.clients.qianwen_client import QianwenClient
 from app.metadata.summarizers.lightweight_summarizer import LightweightSummaryGenerator
 from app.metadata.extractors.keybert_extractor import KeyBERTExtractor
 from app.metadata.evaluators.quality_evaluator import QualityEvaluator
-from app.metadata.processors.async_processor import AsyncMetadataProcessor
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_environment():
@@ -252,42 +252,9 @@ async def real_components(real_qianwen_client):
         "evaluator": evaluator
     }
 
-@pytest.fixture
-async def mock_processor(mock_qianwen_client, mock_keybert_extractor, mock_quality_evaluator):
-    """模拟异步处理器"""
-    summarizer = LightweightSummaryGenerator()
-    
-    processor = AsyncMetadataProcessor(
-        summarizer=summarizer,
-        extractor=mock_keybert_extractor,
-        evaluator=mock_quality_evaluator,
-        max_workers=2,
-        batch_size=5,
-        enable_quality_check=True
-    )
-    
-    await processor.start()
-    yield processor
-    await processor.stop()
 
-@pytest.fixture
-async def real_processor(real_components, test_config):
-    """真实异步处理器（仅在启用真实API时使用）"""
-    if not test_config["enable_real_api"]:
-        pytest.skip("真实API测试被禁用")
-    
-    processor = AsyncMetadataProcessor(
-        summarizer=real_components["summarizer"],
-        extractor=real_components["extractor"],
-        evaluator=real_components["evaluator"],
-        max_workers=test_config["max_workers"],
-        batch_size=test_config["batch_size"],
-        enable_quality_check=True
-    )
-    
-    await processor.start()
-    yield processor
-    await processor.stop()
+
+
 
 @pytest.fixture
 def test_data_files(temp_directory):

@@ -450,8 +450,8 @@ brew install redis
 # 启动Redis
 redis-server
 
-# 启动RQ Worker
-python scripts/start_rq_worker.py
+# 启动Celery Worker
+celery -A app.celery_app worker --loglevel=info --pool=threads --concurrency=2 --queues=metadata
 ```
 
 ### 2. GPU加速（可选）

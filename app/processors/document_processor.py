@@ -2,19 +2,19 @@
 文档处理器
 """
 
+from math import log
 from typing import List, Dict, Any, Optional
 import os
 import json
 import uuid
-from redis import Redis
-from rq import Queue
 from .pdf_processor import PDFProcessor
 from .enhanced_pdf_processor import EnhancedPDFProcessor
 from .cleaners import TextCleaner
 from .medical_terminology import MedicalTerminologyStandardizer
 from .quality_filter import TextQualityFilter, ChunkMetadataEnhancer
 from app.utils.logger import setup_logger
-from app.metadata.tasks import generate_metadata_for_chunk
+from app.metadata.celery_tasks import generate_metadata_for_chunk
+from app.storage.vector_store import get_vector_store_async
 from datetime import datetime
 
 logger = setup_logger(__name__)
@@ -25,8 +25,7 @@ class DocumentProcessor:
     
     def __init__(self, input_dir: str, output_dir: str, vector_store=None, use_enhanced_parser: bool = True, 
                  enable_cleaning: bool = True, enable_terminology_standardization: bool = True,
-                 enable_quality_filtering: bool = True, enable_async_metadata: bool = True,
-                 redis_host: str = 'localhost', redis_port: int = 6379):
+                 enable_quality_filtering: bool = True, enable_async_metadata: bool = True):
         """初始化文档处理器
         
         Args:
@@ -38,8 +37,6 @@ class DocumentProcessor:
             enable_terminology_standardization: 是否启用术语标准化
             enable_quality_filtering: 是否启用质量过滤
             enable_async_metadata: 是否启用异步元数据处理
-            redis_host: Redis服务器地址
-            redis_port: Redis服务器端口
         """
         self.input_dir = input_dir
         self.output_dir = output_dir
@@ -61,22 +58,24 @@ class DocumentProcessor:
             self.quality_filter = TextQualityFilter()
             self.metadata_enhancer = ChunkMetadataEnhancer()
             
-        # Initialize RQ queue for async metadata processing
+        # Celery is initialized globally, no need for queue setup
         if self.enable_async_metadata:
-            try:
-                redis_conn = Redis(host=redis_host, port=redis_port, decode_responses=True)
-                self.metadata_queue = Queue('metadata_queue', connection=redis_conn)
-                logger.info(f"RQ队列已初始化，连接到Redis {redis_host}:{redis_port}")
-            except Exception as e:
-                logger.error(f"初始化RQ队列失败: {e}")
-                logger.warning("将禁用异步元数据处理")
-                self.enable_async_metadata = False
+            logger.info("Celery异步元数据处理已启用")
+    
+    async def _ensure_vector_store(self):
+        """确保vector_store已初始化"""
+        if self.vector_store is None:
+            logger.info("初始化vector_store...")
+            self.vector_store = await get_vector_store_async()
+            logger.info("vector_store初始化完成")
+        return self.vector_store
         
-    def process_single_document(self, file_path: str) -> Dict[str, Any]:
-        """处理单个文档（支持PDF和TXT文件）
+    async def process_single_document(self, file_path: str, document_id: str = None) -> Dict[str, Any]:
+        """处理单个文档
         
         Args:
-            file_path: 文件路径
+            file_path: 文档文件路径
+            document_id: 可选的文档ID，如果不提供则生成新的ID
             
         Returns:
             处理结果字典，包含原始文本、清洗后文本、结构化信息等
@@ -119,6 +118,7 @@ class DocumentProcessor:
             
             # Step 2: Multi-stage text cleaning
             cleaned_text = raw_text
+            logger.info(f"enable_cleaning: {self.enable_cleaning}")
             if self.enable_cleaning:
                 cleaned_text = self.text_cleaner.clean_comprehensive(raw_text)
                 
@@ -145,8 +145,9 @@ class DocumentProcessor:
             # Step 4: Enhanced metadata
             enhanced_metadata = self._enhance_metadata(metadata, file_path)
             
-            # Generate document ID for all processing paths
-            document_id = str(uuid.uuid4())
+            # Use provided document ID or generate new one
+            if document_id is None:
+                document_id = str(uuid.uuid4())
             enhanced_metadata["document_id"] = document_id
             
             # Step 5: Quality filtering and metadata enhancement (if enabled)
@@ -162,11 +163,12 @@ class DocumentProcessor:
                 
                 # Enhance metadata for each chunk
                 enhanced_chunk_metadata = []
-                for chunk, base_meta in zip(filtered_chunks, chunk_metadata):
+                for i, (chunk, base_meta) in enumerate(zip(filtered_chunks, chunk_metadata)):
                     enhanced_meta = self.metadata_enhancer.enhance_chunk_metadata(chunk, base_meta)
-                    # Generate unique chunk ID for async processing
-                    chunk_id = str(uuid.uuid4())
+                    # Generate chunk ID that matches vector store format: {document_id}_chunk_{index}
+                    chunk_id = f"{document_id}_chunk_{i}"
                     enhanced_meta["chunk_id"] = chunk_id
+                    enhanced_meta["chunk_index"] = i  # Ensure chunk_index is set
                     enhanced_chunk_metadata.append(enhanced_meta)
                 
                 # Update final result with filtered chunks
@@ -184,6 +186,8 @@ class DocumentProcessor:
                     logger.info(f"准备为 {len(filtered_chunks)} 个文本块创建异步元数据生成任务...")
                     
                     # Implement "store first, update later" strategy
+                    # Ensure vector_store is initialized
+                    await self._ensure_vector_store()
                     if self.vector_store:
                         for chunk_text, chunk_meta in zip(filtered_chunks, enhanced_chunk_metadata):
                             chunk_id = chunk_meta.get("chunk_id")
@@ -200,51 +204,45 @@ class DocumentProcessor:
                                     }
                                     
                                     # Store to ChromaDB immediately (store first)
-                                    self.vector_store.add_documents(
-                                        texts=[chunk_text],
-                                        metadatas=[initial_metadata],
+                                    await self.vector_store.add_documents(
+                                        documents=[{
+                                            "content": chunk_text,
+                                            "metadata": initial_metadata
+                                        }],
                                         ids=[chunk_id]
                                     )
                                     logger.debug(f"已存储块 {chunk_id} 到ChromaDB")
                                     
                                     # Then submit async metadata generation task (update later)
-                                    job = self.metadata_queue.enqueue(
-                                        generate_metadata_for_chunk,
+                                    task = generate_metadata_for_chunk.delay(
                                         chunk_id,
                                         chunk_text,
-                                        document_id,
-                                        job_timeout='10m',
-                                        result_ttl=86400,
-                                        failure_ttl=604800
+                                        document_id
                                     )
-                                    logger.debug(f"任务已推送到队列: chunk_id={chunk_id}, job_id={job.id}")
+                                    logger.debug(f"Celery任务已提交: chunk_id={chunk_id}, task_id={task.id}")
                                 except Exception as e:
                                     logger.error(f"存储块 {chunk_id} 到ChromaDB或推送任务失败: {e}")
                         
-                        logger.info("所有文本块已存储到ChromaDB，元数据生成任务已成功推送到队列")
+                        logger.info("所有文本块已存储到ChromaDB，元数据生成任务已成功提交到Celery")
                     else:
-                        logger.warning("VectorStore未初始化，跳过ChromaDB存储，仅推送异步任务")
+                        logger.warning("VectorStore未初始化，跳过ChromaDB存储，仅提交异步任务")
                         # Fallback to original logic
                         for chunk_text, chunk_meta in zip(filtered_chunks, enhanced_chunk_metadata):
                             chunk_id = chunk_meta.get("chunk_id")
                             if chunk_id:
                                 try:
-                                    job = self.metadata_queue.enqueue(
-                                        generate_metadata_for_chunk,
+                                    task = generate_metadata_for_chunk.delay(
                                         chunk_id,
                                         chunk_text,
-                                        document_id,
-                                        job_timeout='10m',
-                                        result_ttl=86400,
-                                        failure_ttl=604800
+                                        document_id
                                     )
-                                    logger.debug(f"任务已推送到队列: chunk_id={chunk_id}, job_id={job.id}")
+                                    logger.debug(f"Celery任务已提交: chunk_id={chunk_id}, task_id={task.id}")
                                 except Exception as e:
-                                    logger.error(f"推送任务到队列失败 chunk_id={chunk_id}: {e}")
+                                    logger.error(f"提交Celery任务失败 chunk_id={chunk_id}: {e}")
                         
-                        logger.info("所有元数据生成任务已成功推送到队列")
+                        logger.info("所有元数据生成任务已成功提交到Celery")
                 else:
-                    logger.info("异步元数据处理已禁用，跳过任务推送")
+                    logger.info("异步元数据处理已禁用，跳过任务提交")
             else:
                 # If quality filtering is disabled, create empty chunk metadata list
                 enhanced_chunk_metadata = []
@@ -457,7 +455,7 @@ class DocumentProcessor:
         
         return chunks
     
-    def process_all_documents(self) -> List[Dict[str, Any]]:
+    async def process_all_documents(self) -> List[Dict[str, Any]]:
         """处理目录中的所有PDF文档
             处理结果列表
         """
@@ -479,7 +477,7 @@ class DocumentProcessor:
         for filename in pdf_files:
             file_path = os.path.join(self.input_dir, filename)
             try:
-                result = self.process_single_document(file_path)
+                result = await self.process_single_document(file_path)
                 results.append(result)
             except Exception as e:
                 logger.error(f"跳过文件 {filename}: {str(e)}")

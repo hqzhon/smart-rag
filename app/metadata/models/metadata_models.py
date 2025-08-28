@@ -72,8 +72,9 @@ class DocumentSummary(BaseModel):
     def validate_content(cls, v):
         if not v or not v.strip():
             raise ValueError("摘要内容不能为空")
+        # 如果摘要超过200字符，自动截断
         if len(v) > 200:
-            raise ValueError("摘要长度不能超过200字符")
+            v = v[:200] + "..."
         return v.strip()
     
     @validator('length', always=True)

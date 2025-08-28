@@ -87,11 +87,12 @@ class VectorStore(metaclass=SingletonMeta):
             self.client = None
             self.collection = MockCollection()
     
-    async def add_documents(self, documents: List[Dict[str, Any]]) -> None:
+    async def add_documents(self, documents: List[Dict[str, Any]], ids: Optional[List[str]] = None) -> None:
         """异步添加文档到向量存储
         
         Args:
             documents: 文档列表，每个文档包含content和metadata
+            ids: 可选的文档ID列表，如果提供则使用，否则自动生成
         """
         if not documents:
             logger.warning("没有文档需要添加")
@@ -104,19 +105,60 @@ class VectorStore(metaclass=SingletonMeta):
             logger.info(f"开始异步生成 {len(texts)} 个文档的嵌入向量...")
             embeddings = await self.embedding_model.embed_documents(texts)
             
-            ids = [f"{meta.get('document_id', f'unknown_{i}')}_chunk_{meta.get('chunk_index', i)}" for i, meta in enumerate(metadatas)]
+            # Use provided ids or generate them
+            if ids:
+                document_ids = ids
+            else:
+                document_ids = [f"{meta.get('document_id', f'unknown_{i}')}_chunk_{meta.get('chunk_index', i)}" for i, meta in enumerate(metadatas)]
             
             self.collection.add(
                 embeddings=embeddings,
                 documents=texts,
                 metadatas=metadatas,
-                ids=ids
+                ids=document_ids
             )
             
             logger.info(f"成功添加 {len(documents)} 个文档到向量存储")
             
         except Exception as e:
             logger.error(f"添加文档到向量存储时出错: {str(e)}")
+            raise
+    
+    def add_documents_sync(self, documents: List[Dict[str, Any]], ids: Optional[List[str]] = None) -> None:
+        """同步添加文档到向量存储（用于多线程环境）
+        
+        Args:
+            documents: 文档列表，每个文档包含content和metadata
+            ids: 可选的文档ID列表，如果提供则使用，否则自动生成
+        """
+        if not documents:
+            logger.warning("没有文档需要添加")
+            return
+        
+        try:
+            texts = [doc["content"] for doc in documents]
+            metadatas = [doc["metadata"] for doc in documents]
+            
+            logger.info(f"开始同步生成 {len(texts)} 个文档的嵌入向量...")
+            embeddings = self.embedding_model.embed_documents_sync(texts)
+            
+            # Use provided ids or generate them
+            if ids:
+                document_ids = ids
+            else:
+                document_ids = [f"{meta.get('document_id', f'unknown_{i}')}_chunk_{meta.get('chunk_index', i)}" for i, meta in enumerate(metadatas)]
+            
+            self.collection.add(
+                embeddings=embeddings,
+                documents=texts,
+                metadatas=metadatas,
+                ids=document_ids
+            )
+            
+            logger.info(f"成功同步添加 {len(documents)} 个文档到向量存储")
+            
+        except Exception as e:
+            logger.error(f"同步添加文档到向量存储时出错: {str(e)}")
             raise
     
     async def similarity_search(self, query: str, k: int = 5, filter_dict: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -208,27 +250,35 @@ class VectorStore(metaclass=SingletonMeta):
             logger.error(f"获取文档chunks时出错: {str(e)}")
             return []
     
-    async def update_document(self, ids: List[str], metadatas: List[Dict[str, Any]]) -> bool:
+    async def update_document(self, chunk_id: str, keywords: str, summary: str) -> bool:
         """更新文档元数据
         
         Args:
-            ids: 要更新的文档ID列表
-            metadatas: 新的元数据列表，与ids一一对应
+            chunk_id: 要更新的chunk ID
+            keywords: 新的关键词
+            summary: 新的摘要
             
         Returns:
             更新是否成功
         """
         try:
-            if len(ids) != len(metadatas):
-                logger.error("IDs和metadatas列表长度不匹配")
-                return False
-                
+            from datetime import datetime
+            
+            # 构建更新的元数据
+            updated_metadata = {
+                'keywords': keywords,
+                'summary': summary,
+                'has_metadata': True,
+                'updated_at': datetime.now().isoformat()
+            }
+            
+            # 使用chunk_id直接更新
             self.collection.update(
-                ids=ids,
-                metadatas=metadatas
+                ids=[chunk_id],
+                metadatas=[updated_metadata]
             )
             
-            logger.info(f"成功更新 {len(ids)} 个文档的元数据")
+            logger.info(f"成功更新chunk {chunk_id} 的元数据")
             return True
             
         except Exception as e:

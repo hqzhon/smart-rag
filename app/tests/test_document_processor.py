@@ -76,7 +76,9 @@ class TestDocumentProcessor:
                             mock_filter.return_value = (["测试块1"], [{"source": test_pdf_path, "chunk_index": 0}])
                             
                             # 执行处理
-                            result = document_processor.process_single_document(test_pdf_path)
+                            import uuid
+                            test_document_id = str(uuid.uuid4())
+                            result = await document_processor.process_single_document(test_pdf_path, test_document_id)
                             
                             # 验证结果
                             assert result is not None
@@ -113,7 +115,9 @@ class TestDocumentProcessor:
                         mock_filter.return_value = (["TXT测试块1"], [{"source": test_txt_path, "chunk_index": 0}])
                         
                         # 执行处理
-                        result = document_processor.process_single_document(test_txt_path)
+                        import uuid
+                        test_document_id = str(uuid.uuid4())
+                        result = await document_processor.process_single_document(test_txt_path, test_document_id)
                         
                         # 验证结果
                         assert result is not None
@@ -124,7 +128,8 @@ class TestDocumentProcessor:
                         assert result["cleaned_text"] == "清理后的TXT内容"
                         assert result["standardized_text"] == "标准化后的TXT内容"
     
-    def test_process_single_document_unsupported_type(self, document_processor, tmp_dirs):
+    @pytest.mark.asyncio
+    async def test_process_single_document_unsupported_type(self, document_processor, tmp_dirs):
         """测试处理不支持的文件类型"""
         input_dir, _ = tmp_dirs
         
@@ -134,8 +139,10 @@ class TestDocumentProcessor:
             f.write(b"binary content")
         
         # 执行处理，应该抛出异常
+        import uuid
+        test_document_id = str(uuid.uuid4())
         with pytest.raises(ValueError, match="Unsupported file type"):
-            document_processor.process_single_document(test_unsupported_path)
+            await document_processor.process_single_document(test_unsupported_path, test_document_id)
     
     def test_split_into_chunks(self, document_processor):
         """测试文本分块功能"""

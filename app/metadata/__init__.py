@@ -17,7 +17,7 @@ from .models.metadata_models import (
 from .clients.qianwen_client import QianwenClient
 from .summarizers.lightweight_summarizer import LightweightSummaryGenerator
 from .extractors.keybert_extractor import KeyBERTExtractor
-from .processors.async_processor import AsyncMetadataProcessor
+
 from .evaluators.quality_evaluator import QualityEvaluator
 
 __all__ = [
@@ -32,7 +32,7 @@ __all__ = [
     # 核心组件
     'LightweightSummaryGenerator',
     'KeyBERTExtractor',
-    'AsyncMetadataProcessor',
+
     'QualityEvaluator'
 ]
 
