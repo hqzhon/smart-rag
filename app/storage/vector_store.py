@@ -105,11 +105,18 @@ class VectorStore(metaclass=SingletonMeta):
             logger.info(f"开始异步生成 {len(texts)} 个文档的嵌入向量...")
             embeddings = await self.embedding_model.embed_documents(texts)
             
-            # Use provided ids or generate them
+            # Use provided ids or extract from metadata or generate them
             if ids:
                 document_ids = ids
             else:
-                document_ids = [f"{meta.get('document_id', f'unknown_{i}')}_chunk_{meta.get('chunk_index', i)}" for i, meta in enumerate(metadatas)]
+                document_ids = []
+                for i, meta in enumerate(metadatas):
+                    # First try to use chunk_id from metadata
+                    if 'chunk_id' in meta:
+                        document_ids.append(str(meta['chunk_id']))  # Ensure it's a string
+                    else:
+                        # Fallback to generated ID
+                        document_ids.append(f"{meta.get('document_id', f'unknown_{i}')}_chunk_{meta.get('chunk_index', i)}")
             
             self.collection.add(
                 embeddings=embeddings,
@@ -142,11 +149,18 @@ class VectorStore(metaclass=SingletonMeta):
             logger.info(f"开始同步生成 {len(texts)} 个文档的嵌入向量...")
             embeddings = self.embedding_model.embed_documents_sync(texts)
             
-            # Use provided ids or generate them
+            # Use provided ids or extract from metadata or generate them
             if ids:
                 document_ids = ids
             else:
-                document_ids = [f"{meta.get('document_id', f'unknown_{i}')}_chunk_{meta.get('chunk_index', i)}" for i, meta in enumerate(metadatas)]
+                document_ids = []
+                for i, meta in enumerate(metadatas):
+                    # First try to use chunk_id from metadata
+                    if 'chunk_id' in meta:
+                        document_ids.append(str(meta['chunk_id']))  # Ensure it's a string
+                    else:
+                        # Fallback to generated ID
+                        document_ids.append(f"{meta.get('document_id', f'unknown_{i}')}_chunk_{meta.get('chunk_index', i)}")
             
             self.collection.add(
                 embeddings=embeddings,
@@ -272,9 +286,9 @@ class VectorStore(metaclass=SingletonMeta):
                 'updated_at': datetime.now().isoformat()
             }
             
-            # 使用chunk_id直接更新
+            # 使用chunk_id直接更新，确保ID是字符串类型
             self.collection.update(
-                ids=[chunk_id],
+                ids=[str(chunk_id)],
                 metadatas=[updated_metadata]
             )
             

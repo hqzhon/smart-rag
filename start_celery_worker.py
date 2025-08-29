@@ -8,6 +8,10 @@ import os
 import sys
 import logging
 from celery import Celery
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +35,7 @@ def main():
         
         logger.info("Starting Celery Worker for metadata processing...")
         logger.info(f"Redis URL: {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
+        debug = os.getenv("DEBUG", "true").lower() == "true"
         
         # 启动Worker
         # 参数说明:
@@ -39,7 +44,7 @@ def main():
         # --queues=metadata: 只处理metadata队列的任务
         celery_app.worker_main([
             'worker',
-            '--loglevel=info',
+            '--loglevel=' + ('debug' if debug else 'info'),
             '--concurrency=2',
             '--queues=metadata',
             '--pool=prefork'

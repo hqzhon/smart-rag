@@ -27,7 +27,7 @@ class QianwenClient:
         self.base_url = base_url or self.settings.qianwen_base_url
         
         # 默认模型配置
-        self.default_model = "qwen2.5-1.5b-instruct"
+        self.default_model = "qwen3-8b"
         self.max_tokens = 2048
         self.temperature = 0.3
         
@@ -102,7 +102,7 @@ class QianwenClient:
         
         Args:
             prompt: 用户提示词
-            model: 模型名称，默认使用qwen2.5-1.5b-instruct
+            model: 模型名称，默认使用qwen3-8b
             max_tokens: 最大token数
             temperature: 温度参数，控制随机性
             system_prompt: 系统提示词
@@ -134,7 +134,8 @@ class QianwenClient:
                 "messages": messages,
                 "max_tokens": max_tokens_val,
                 "temperature": temperature_val,
-                "stream": False
+                "stream": False,
+                "enable_thinking": False  # 非流式调用必须设置为false
             }
             
             # 使用千问OpenAI兼容模式的URL
