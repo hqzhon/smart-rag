@@ -68,81 +68,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
         bgcolor: 'background.default',
       }}
     >
-      {/* 现代化头部 */}
-      <Slide direction="down" in timeout={600}>
-        <Paper
-          elevation={0}
-          sx={{
-            background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(217, 70, 239, 0.1) 100%)',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            backdropFilter: 'blur(10px)',
-          }}
-        >
-          <Container maxWidth="lg">
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                py: 2,
-              }}
-            >
-              <AnimatedBox animation="fadeInLeft" delay="0.2s">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <HoverAnimatedBox hoverAnimation="scale">
-                    <Avatar
-                      sx={{
-                        bgcolor: 'primary.main',
-                        width: 48,
-                        height: 48,
-                      }}
-                    >
-                      <BotIcon />
-                    </Avatar>
-                  </HoverAnimatedBox>
-                  <Box>
-                    <AnimatedBox animation="fadeInUp" delay="0.4s">
-                      <Typography
-                        variant="h5"
-                        component="h1"
-                        sx={{
-                          fontWeight: 700,
-                          background: 'linear-gradient(135deg, #0ea5e9 0%, #d946ef 100%)',
-                          backgroundClip: 'text',
-                          WebkitBackgroundClip: 'text',
-                          WebkitTextFillColor: 'transparent',
-                        }}
-                      >
-                        智能医疗助手
-                      </Typography>
-                    </AnimatedBox>
-                    <AnimatedBox animation="fadeInUp" delay="0.6s">
-                      <Typography variant="body2" color="text.secondary">
-                        基于RAG技术的医疗知识问答系统
-                      </Typography>
-                    </AnimatedBox>
-                  </Box>
-                </Box>
-              </AnimatedBox>
-              <AnimatedBox animation="fadeInLeft" delay="0.8s">
-                <HoverAnimatedBox hoverAnimation="glow">
-                  <Chip
-                    icon={<ChatIcon />}
-                    label={`会话 ${sessionId.slice(0, 8)}`}
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      borderColor: 'primary.main',
-                      color: 'primary.main',
-                    }}
-                  />
-                </HoverAnimatedBox>
-              </AnimatedBox>
-            </Box>
-          </Container>
-        </Paper>
-      </Slide>
 
       {/* 加载指示器 */}
       <Fade in={isLoading} timeout={300}>
@@ -185,12 +110,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
         }}
       >
         <Container
-          maxWidth="lg"
+          maxWidth={false}
           sx={{
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
-            py: 2,
+            py: 1,
+            px: 2,
+            maxWidth: '100%',
           }}
         >
           <Fade in timeout={300}>
@@ -224,9 +151,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
             backdropFilter: 'blur(10px)',
           }}
         >
-          <Container maxWidth="lg">
+          <Container maxWidth={false} sx={{ px: 2 }}>
             <AnimatedBox animation="fadeInUp" delay="0.3s">
-              <Box sx={{ py: 2 }}>
+              <Box sx={{ py: 1 }}>
                 <ChatInput
                   onSendMessage={handleSendMessage}
                   disabled={isLoading}

@@ -35,6 +35,8 @@ import {
   Delete as DeleteIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
 
 import { useChatStore } from '@/stores/chatStore';
@@ -46,13 +48,10 @@ interface SidebarProps {
   open: boolean;
   onToggle: () => void;
   onCreateSession: () => void;
+  onWidthChange?: (width: number) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({
-  open,
-  onToggle,
-  onCreateSession,
-}) => {
+const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWidthChange }) => {
   const { sessions, currentSession, setCurrentSession, loadSessions, loadChatHistory } = useChatStore();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -65,6 +64,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [newSessionTitle, setNewSessionTitle] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['今天']));
+  const [drawerWidth, setDrawerWidth] = useState(isMobile ? window.innerWidth : 280);
+  const [isResizing, setIsResizing] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const minWidth = 200;
+  const maxWidth = 500;
+  const collapsedWidth = 60;
 
   useEffect(() => {
     loadSessions();
@@ -208,126 +213,133 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const drawerWidth = isMobile ? '100vw' : isTablet ? 260 : 300;
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isMobile) return;
+    setIsResizing(true);
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+     if (!isResizing || isMobile) return;
+     const newWidth = Math.min(Math.max(e.clientX, minWidth), maxWidth);
+     setDrawerWidth(newWidth);
+     onWidthChange?.(newWidth);
+   };
+
+  const handleMouseUp = () => {
+    setIsResizing(false);
+  };
+
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isResizing]);
+
+  const toggleCollapse = () => {
+     const newCollapsed = !collapsed;
+     setCollapsed(newCollapsed);
+     onWidthChange?.(newCollapsed ? collapsedWidth : drawerWidth);
+   };
+
+  const effectiveWidth = collapsed ? collapsedWidth : (isMobile ? '100vw' : `${drawerWidth}px`);
 
   const drawerContent = (
     <AnimatedBox animation="fadeInLeft" duration="0.4s">
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* 现代化头部 */}
-        <AnimatedBox animation="fadeInUp" duration="0.6s" delay="0.1s">
+        {/* 切换按钮 */}
+        {!isMobile && (
           <Box
             sx={{
-              p: 3,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              position: 'relative',
-              overflow: 'hidden',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)',
-                zIndex: 0,
-              },
+              p: 1,
+              display: 'flex',
+              justifyContent: collapsed ? 'center' : 'flex-end',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
-            <Box sx={{ position: 'relative', zIndex: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <HoverAnimatedBox hoverAnimation="scale">
-                  <Avatar
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      mr: 2,
-                      background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <ChatIcon />
-                  </Avatar>
-                </HoverAnimatedBox>
-                {isMobile && (
-                  <HoverAnimatedBox hoverAnimation="scale">
-                    <AccessibleIconButton
-                      onClick={onToggle}
-                      aria-label="关闭侧边栏"
-                      sx={{
-                        ml: 'auto',
-                        color: 'white',
-                        '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' },
-                      }}
-                    >
-                      <CloseIcon />
-                    </AccessibleIconButton>
-                  </HoverAnimatedBox>
-                )}
-              </Box>
-              <Typography 
-                variant={isMobile ? "h6" : "h5"} 
-                sx={{ 
-                  fontWeight: 700,
-                  background: 'linear-gradient(45deg, #fff 30%, #f8f9fa 90%)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  mb: 0.5,
-                }}
-              >
-                医疗RAG系统
-              </Typography>
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  opacity: 0.9,
-                  fontSize: isMobile ? '0.8rem' : '0.875rem',
-                }}
-              >
-                智能医疗问答助手
-              </Typography>
-            </Box>
+            <IconButton onClick={toggleCollapse} size="small">
+              {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+            </IconButton>
           </Box>
-        </AnimatedBox>
+        )}
+        {isMobile && (
+          <Box
+            sx={{
+              p: 1,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <IconButton onClick={onToggle} edge="end">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        )}
 
         {/* 现代化操作按钮 */}
-        <AnimatedBox animation="fadeInUp" duration="0.6s" delay="0.3s">
-          <Box sx={{ p: 2.5 }}>
-            <HoverAnimatedBox hoverAnimation="scale">
-              <Button
-                fullWidth
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={onCreateSession}
-                sx={{ 
-                  mb: 1.5,
-                  py: 1.2,
-                  borderRadius: 2,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  boxShadow: '0 4px 12px rgba(103, 126, 234, 0.3)',
-                  fontSize: isMobile ? '0.9rem' : '1rem',
-                  fontWeight: 600,
-                  transition: 'all 0.2s ease-in-out',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 6px 16px rgba(103, 126, 234, 0.4)',
-                  },
-                }}
-              >
-                新建对话
-              </Button>
-            </HoverAnimatedBox>
+        {!collapsed && (
+          <AnimatedBox animation="fadeInUp" duration="0.6s" delay="0.3s">
+            <Box sx={{ p: 2.5 }}>
+              <HoverAnimatedBox hoverAnimation="scale">
+                <Button
+                  fullWidth
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={onCreateSession}
+                  sx={{ 
+                    mb: 1.5,
+                    py: 1.2,
+                    borderRadius: 2,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    boxShadow: '0 4px 12px rgba(103, 126, 234, 0.3)',
+                    fontSize: isMobile ? '0.9rem' : '1rem',
+                    fontWeight: 600,
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 16px rgba(103, 126, 234, 0.4)',
+                    },
+                  }}
+                >
+                  新建对话
+                </Button>
+              </HoverAnimatedBox>
 
+            </Box>
+          </AnimatedBox>
+        )}
+        {collapsed && (
+          <Box sx={{ p: 1, display: 'flex', justifyContent: 'center' }}>
+            <IconButton
+              onClick={onCreateSession}
+              sx={{
+                bgcolor: 'primary.main',
+                color: 'white',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  bgcolor: 'primary.dark',
+                },
+              }}
+            >
+              <AddIcon />
+            </IconButton>
           </Box>
-        </AnimatedBox>
+        )}
 
       <Divider />
 
       {/* 现代化会话列表 */}
-      <Box sx={{ flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {!collapsed && (
         <Box sx={{ px: 2.5, py: 1.5 }}>
           <Typography 
             variant="subtitle2" 
@@ -340,44 +352,49 @@ const Sidebar: React.FC<SidebarProps> = ({
             最近对话
           </Typography>
         </Box>
-        
-        <Box 
-          sx={{ 
-            flexGrow: 1, 
-            overflow: 'auto',
-            '&::-webkit-scrollbar': {
-              width: 6,
+      )}
+      
+      <Box 
+        sx={{ 
+          maxHeight: 'calc(100vh - 280px)',
+          overflow: 'auto',
+          overflowX: 'hidden',
+          paddingBottom: 2,
+          '&::-webkit-scrollbar': {
+            width: 6,
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'transparent',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: 'rgba(0,0,0,0.2)',
+            borderRadius: 3,
+            '&:hover': {
+              background: 'rgba(0,0,0,0.3)',
             },
-            '&::-webkit-scrollbar-track': {
-              background: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: 'rgba(0,0,0,0.2)',
-              borderRadius: 3,
-              '&:hover': {
-                background: 'rgba(0,0,0,0.3)',
-              },
-            },
-          }}
-        >
+          },
+        }}
+      >
           {sessions.length === 0 ? (
-            <Fade in timeout={300}>
-              <Box sx={{ px: 2.5, py: 3, textAlign: 'center' }}>
-                <Typography 
-                  variant="body2" 
-                  color="text.secondary"
-                  sx={{ mb: 1, fontWeight: 500 }}
-                >
-                  暂无对话
-                </Typography>
-                <Typography 
-                  variant="caption" 
-                  color="text.secondary"
-                >
-                  创建新对话开始使用
-                </Typography>
-              </Box>
-            </Fade>
+            !collapsed && (
+              <Fade in timeout={300}>
+                <Box sx={{ px: 2.5, py: 3, textAlign: 'center' }}>
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary"
+                    sx={{ mb: 1, fontWeight: 500 }}
+                  >
+                    暂无对话
+                  </Typography>
+                  <Typography 
+                    variant="caption" 
+                    color="text.secondary"
+                  >
+                    创建新对话开始使用
+                  </Typography>
+                </Box>
+              </Fade>
+            )
           ) : (
             Object.entries(groupSessionsByDate(sessions)).map(([groupName, groupSessions]) => {
               if (groupSessions.length === 0) return null;
@@ -385,49 +402,51 @@ const Sidebar: React.FC<SidebarProps> = ({
               return (
                 <Box key={groupName} sx={{ mb: 1 }}>
                   {/* 日期分组标题 */}
-                  <ListItemButton
-                    onClick={() => toggleGroup(groupName)}
-                    sx={{
-                      px: 2.5,
-                      py: 1,
-                      minHeight: 'auto',
-                      '&:hover': {
-                        bgcolor: 'action.hover',
-                      },
-                    }}
-                  >
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        color: 'text.secondary',
-                        fontWeight: 600,
-                        fontSize: '0.75rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                        flexGrow: 1,
+                  {!collapsed && (
+                    <ListItemButton
+                      onClick={() => toggleGroup(groupName)}
+                      sx={{
+                        px: 2.5,
+                        py: 1,
+                        minHeight: 'auto',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                        },
                       }}
                     >
-                      {groupName}
-                    </Typography>
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        color: 'text.secondary',
-                        fontSize: '0.7rem',
-                        mr: 1,
-                      }}
-                    >
-                      {groupSessions.length}
-                    </Typography>
-                    {expandedGroups.has(groupName) ? (
-                      <ExpandLessIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    ) : (
-                      <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    )}
-                  </ListItemButton>
+                      <Typography 
+                        variant="caption" 
+                        sx={{ 
+                          color: 'text.secondary',
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5,
+                          flexGrow: 1,
+                        }}
+                      >
+                        {groupName}
+                      </Typography>
+                      <Typography 
+                        variant="caption" 
+                        sx={{ 
+                          color: 'text.secondary',
+                          fontSize: '0.7rem',
+                          mr: 1,
+                        }}
+                      >
+                        {groupSessions.length}
+                      </Typography>
+                      {expandedGroups.has(groupName) ? (
+                        <ExpandLessIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      ) : (
+                        <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      )}
+                    </ListItemButton>
+                  )}
                   
                   {/* 会话列表 */}
-                  <Collapse in={expandedGroups.has(groupName)} timeout="auto">
+                  <Collapse in={collapsed || expandedGroups.has(groupName)} timeout="auto">
                     <List sx={{ p: 0 }}>
                       {groupSessions.map((session, index) => (
                         <Slide 
@@ -436,7 +455,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                           in 
                           timeout={200 + index * 50}
                         >
-                          <ListItem disablePadding sx={{ px: 1.5, mb: 0.5 }}>
+                          <ListItem disablePadding sx={{ px: collapsed ? 0.5 : 1.5, mb: 0.5 }}>
                             <HoverAnimatedBox hoverAnimation="scale" sx={{ width: '100%' }}>
                               <ListItemButton
                                 selected={session.id === currentSession}
@@ -444,7 +463,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 sx={{
                                   borderRadius: 2,
                                   py: 1.5,
-                                  pr: 1,
+                                  pr: collapsed ? 0.5 : 1,
+                                  pl: collapsed ? 0.5 : 2,
+                                  justifyContent: collapsed ? 'center' : 'flex-start',
                                   transition: 'all 0.2s ease-in-out',
                                   '&.Mui-selected': {
                                     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -461,7 +482,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                   },
                                 }}
                               >
-                                <ListItemIcon sx={{ minWidth: 40 }}>
+                                <ListItemIcon sx={{ minWidth: collapsed ? 'auto' : 40, justifyContent: 'center' }}>
                                   <HoverAnimatedBox hoverAnimation="scale">
                                     <Avatar
                                       sx={{
@@ -477,40 +498,44 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     </Avatar>
                                   </HoverAnimatedBox>
                                 </ListItemIcon>
-                                <ListItemText
-                                  primary={session.title}
-                                  secondary={`${session.messageCount} 条消息`}
-                                  primaryTypographyProps={{
-                                    noWrap: true,
-                                    fontSize: isMobile ? '0.85rem' : '0.9rem',
-                                    fontWeight: 500,
-                                  }}
-                                  secondaryTypographyProps={{
-                                    fontSize: isMobile ? '0.7rem' : '0.75rem',
-                                    sx: {
-                                      color: session.id === currentSession 
-                                        ? 'rgba(255,255,255,0.8)' 
-                                        : 'text.secondary',
-                                    },
-                                  }}
-                                />
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => handleMenuOpen(e, session.id)}
-                                  sx={{
-                                    ml: 1,
-                                    opacity: 0.7,
-                                    color: session.id === currentSession ? 'white' : 'text.secondary',
-                                    '&:hover': {
-                                      opacity: 1,
-                                      bgcolor: session.id === currentSession 
-                                        ? 'rgba(255,255,255,0.1)' 
-                                        : 'action.hover',
-                                    },
-                                  }}
-                                >
-                                  <MoreVertIcon fontSize="small" />
-                                </IconButton>
+                                {!collapsed && (
+                                  <ListItemText
+                                    primary={session.title}
+                                    secondary={`${session.messageCount} 条消息`}
+                                    primaryTypographyProps={{
+                                      noWrap: true,
+                                      fontSize: isMobile ? '0.85rem' : '0.9rem',
+                                      fontWeight: 500,
+                                    }}
+                                    secondaryTypographyProps={{
+                                      fontSize: isMobile ? '0.7rem' : '0.75rem',
+                                      sx: {
+                                        color: session.id === currentSession 
+                                          ? 'rgba(255,255,255,0.8)' 
+                                          : 'text.secondary',
+                                      },
+                                    }}
+                                  />
+                                )}
+                                {!collapsed && (
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => handleMenuOpen(e, session.id)}
+                                    sx={{
+                                      ml: 1,
+                                      opacity: 0.7,
+                                      color: session.id === currentSession ? 'white' : 'text.secondary',
+                                      '&:hover': {
+                                        opacity: 1,
+                                        bgcolor: session.id === currentSession 
+                                          ? 'rgba(255,255,255,0.1)' 
+                                          : 'action.hover',
+                                      },
+                                    }}
+                                  >
+                                    <MoreVertIcon fontSize="small" />
+                                  </IconButton>
+                                )}
                               </ListItemButton>
                             </HoverAnimatedBox>
                           </ListItem>
@@ -523,10 +548,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             })
           )}
         </Box>
-      </Box>
 
       <Divider />
-
 
     </Box>
     </AnimatedBox>
@@ -575,14 +598,22 @@ const Sidebar: React.FC<SidebarProps> = ({
           keepMounted: true, // Better open performance on mobile.
         }}
         sx={{
-          width: drawerWidth,
+          width: effectiveWidth,
           flexShrink: 0,
+          zIndex: 800,
+          transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '& .MuiDrawer-paper': {
-            width: drawerWidth,
+            width: effectiveWidth,
             boxSizing: 'border-box',
             borderRight: isMobile ? 'none' : '1px solid',
             borderColor: 'divider',
             boxShadow: isMobile ? '0 8px 32px rgba(0,0,0,0.12)' : 'none',
+            position: 'fixed',
+            top: '64px',
+            transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            height: 'calc(100vh - 64px)',
+            maxHeight: 'calc(100vh - 64px)',
+            overflow: 'hidden',
             ...(isMobile && {
               height: '100vh',
               maxHeight: '100vh',
@@ -591,6 +622,25 @@ const Sidebar: React.FC<SidebarProps> = ({
         }}
       >
         {drawerContent}
+        {/* 拖拽调整宽度的手柄 */}
+        {!isMobile && !collapsed && (
+          <Box
+            onMouseDown={handleMouseDown}
+            sx={{
+              position: 'absolute',
+              top: 0,
+              right: -2,
+              width: 4,
+              height: '100%',
+              cursor: 'col-resize',
+              bgcolor: 'transparent',
+              '&:hover': {
+                bgcolor: 'primary.main',
+              },
+              zIndex: 1201,
+            }}
+          />
+        )}
       </Drawer>
       
       {/* 操作菜单 */}

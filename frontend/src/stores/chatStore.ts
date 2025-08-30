@@ -116,6 +116,7 @@ export const useChatStore = create<ChatStore>()(
           
           if (response && response.sessions) {
             const sessions: ChatSession[] = response.sessions
+              .filter((item: any) => item && item.id)
               .map((item: any) => ({
                 id: item.id,
                 title: item.title || '未命名对话',

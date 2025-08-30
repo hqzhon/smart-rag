@@ -32,6 +32,7 @@ const ChatPage: React.FC = () => {
   } = useChatStore();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
 
   useEffect(() => {
     if (sessionId && sessionId !== currentSession) {
@@ -49,7 +50,7 @@ const ChatPage: React.FC = () => {
         window.history.replaceState(null, '', `/chat/${latestSession.id}`);
       }
     }
-  }, [sessionId, currentSession, setCurrentSession, loadChatHistory, sessions]);
+  }, [sessionId, setCurrentSession, loadChatHistory, sessions]);
 
   // 页面初始化时加载会话列表
   useEffect(() => {
@@ -69,6 +70,10 @@ const ChatPage: React.FC = () => {
     setError(null);
   };
 
+  const handleSidebarWidthChange = (width: number) => {
+    setSidebarWidth(width);
+  };
+
   return (
     <AnimatedBox animation="fadeInUp" duration="0.5s">
       <Box sx={{ height: '100vh', display: 'flex' }}>
@@ -79,6 +84,7 @@ const ChatPage: React.FC = () => {
               open={sidebarOpen}
               onToggle={() => setSidebarOpen(!sidebarOpen)}
               onCreateSession={handleCreateSession}
+              onWidthChange={handleSidebarWidthChange}
             />
           </Box>
         </Slide>
@@ -89,13 +95,13 @@ const ChatPage: React.FC = () => {
             flexGrow: 1,
             display: 'flex',
             flexDirection: 'column',
-            transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            marginLeft: sidebarOpen ? '280px' : '0px',
+            transition: 'padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            paddingLeft: sidebarOpen ? `${sidebarWidth}px` : '0px',
           }}
         >
           {currentSession ? (
             <Fade in timeout={600}>
-              <Box sx={{ height: '100%' }}>
+              <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
                 <ChatInterface sessionId={currentSession} />
               </Box>
             </Fade>
