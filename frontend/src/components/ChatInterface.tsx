@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -22,10 +22,7 @@ import ChatInput from './ChatInput';
 import { useChatStore } from '@/stores/chatStore';
 import { AnimatedBox, HoverAnimatedBox } from '@/components/animations';
 
-// Generate unique ID with timestamp and random component
-const generateUniqueId = (prefix: string): string => {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-};
+
 
 interface ChatInterfaceProps {
   sessionId: string;

@@ -20,7 +20,6 @@ import {
   Sync as ProcessingIcon,
   Error as ErrorIcon,
   CloudUpload as UploadedIcon,
-  Transform as VectorizeIcon,
   Psychology as MetadataIcon,
   Chat as ChatReadyIcon,
 } from '@mui/icons-material';

@@ -192,13 +192,13 @@ const FileManagementPage: React.FC = () => {
   }, [navigate]);
 
   // 处理加载更多（暂时不需要分页）
-  const handleLoadMore = useCallback(async (startIndex: number, stopIndex: number) => {
+  const handleLoadMore = useCallback(async (_startIndex: number, _stopIndex: number) => {
     // 暂时不实现分页加载
     return Promise.resolve();
   }, []);
 
   // 处理分页变更
-  const handlePageChange = useCallback((event: React.ChangeEvent<unknown>, page: number) => {
+  const handlePageChange = useCallback((_event: React.ChangeEvent<unknown>, page: number) => {
     setCurrentPage(page);
     loadDocuments(page, pageSize);
   }, [loadDocuments, pageSize]);
@@ -212,7 +212,7 @@ const FileManagementPage: React.FC = () => {
   }, [loadDocuments]);
 
   // 处理标签页切换
-  const handleTabChange = useCallback((event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = useCallback((_event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
   }, []);
 

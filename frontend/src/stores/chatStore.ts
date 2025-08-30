@@ -200,7 +200,7 @@ export const useChatStore = create<ChatStore>()(
           get().addMessage(sessionId, userMessage);
 
           // 开始流式消息
-          const assistantMessageId = get().startStreamingMessage(sessionId);
+          get().startStreamingMessage(sessionId);
           set({ isLoading: true, error: null });
 
           // 发送流式请求
@@ -309,7 +309,7 @@ export const useChatStore = create<ChatStore>()(
         });
       },
 
-      appendDocuments: (documents: DocumentSource[], messageId?: string) => {
+      appendDocuments: (documents: DocumentSource[], _messageId?: string) => {
         set((state) => {
           if (!state.streamingMessage) return state;
           

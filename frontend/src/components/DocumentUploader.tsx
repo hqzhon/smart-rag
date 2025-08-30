@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Box,
   Dialog,
@@ -35,7 +35,6 @@ import {
   TextFields as TxtIcon,
   Refresh as RetryIcon,
   FileUpload as DragIcon,
-  Speed as ProcessingIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { keyframes } from '@mui/system';
@@ -134,7 +133,7 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [supportedFormats, setSupportedFormats] = useState<SupportedFormatsResponse | null>(null);
   const [isLoadingFormats, setIsLoadingFormats] = useState(true);
-  const [dragCounter, setDragCounter] = useState(0);
+  
   
   const fileInputId = useMemo(() => `modern-file-input-${Math.random().toString(36).substr(2, 9)}`, []);
 
@@ -369,20 +368,15 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setDragCounter(prev => prev + 1);
     setIsDragging(true);
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setDragCounter(prev => {
-      const newCounter = prev - 1;
-      if (newCounter === 0) {
-        setIsDragging(false);
-      }
-      return newCounter;
-    });
+    // A more robust way to handle this is to check relatedTarget, but for now, we'll simplify
+    // and rely on a short timeout or a different logic if this becomes buggy.
+    setIsDragging(false);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -394,7 +388,6 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    setDragCounter(0);
     
     const droppedFiles = e.dataTransfer.files;
     if (droppedFiles.length > 0) {

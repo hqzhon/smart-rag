@@ -5,7 +5,6 @@ import {
   Typography,
   Paper,
   Box,
-  Button,
   Alert,
   CircularProgress,
   IconButton,
@@ -62,7 +61,7 @@ const DocumentPreviewPage: React.FC = () => {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
-  const [pdfLoading, setPdfLoading] = useState<boolean>(true);
+  
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string>('');
   
@@ -144,7 +143,7 @@ const DocumentPreviewPage: React.FC = () => {
   // PDF加载成功回调
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
-    setPdfLoading(false);
+
     setPdfError(null);
   }, []);
 
@@ -152,13 +151,12 @@ const DocumentPreviewPage: React.FC = () => {
   const onDocumentLoadError = useCallback((error: Error) => {
     console.error('PDF load error:', error);
     setPdfError('PDF文件加载失败');
-    setPdfLoading(false);
+
   }, []);
 
   // PDF开始加载回调
   const onDocumentLoadStart = useCallback(() => {
     console.log('PDF loading started');
-    setPdfLoading(true);
   }, []);
 
   // 缩放控制
@@ -183,7 +181,7 @@ const DocumentPreviewPage: React.FC = () => {
   }, []);
 
   // 分块分页
-  const handleChunksPageChange = useCallback(async (event: React.ChangeEvent<unknown>, page: number) => {
+  const handleChunksPageChange = useCallback(async (_event: React.ChangeEvent<unknown>, page: number) => {
     if (!documentId) return;
     
     setChunksPage(page);
@@ -345,7 +343,7 @@ const DocumentPreviewPage: React.FC = () => {
               <Pagination
                 count={numPages}
                 page={currentPage}
-                onChange={(event, page) => setCurrentPage(page)}
+                onChange={(_event, page) => setCurrentPage(page)}
                 color="primary"
                 showFirstButton
                 showLastButton
@@ -380,7 +378,7 @@ const DocumentPreviewPage: React.FC = () => {
               </Typography>
               
               <List sx={{ flex: 1, overflow: 'auto' }}>
-                {chunks.map((chunk, index) => (
+                {chunks.map((chunk) => (
                   <ListItem key={`${chunk.chunk_id}-${chunk.chunk_index}`} disablePadding>
                     <ListItemButton
                       selected={selectedChunk?.chunk_id === chunk.chunk_id && selectedChunk?.chunk_index === chunk.chunk_index}

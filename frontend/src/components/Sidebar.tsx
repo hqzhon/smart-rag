@@ -28,7 +28,6 @@ import {
 import {
   Menu as MenuIcon,
   Add as AddIcon,
-  Upload as UploadIcon,
   Chat as ChatIcon,
   Close as CloseIcon,
   MoreVert as MoreVertIcon,
@@ -54,7 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onToggle,
   onCreateSession,
 }) => {
-  const { sessions, currentSession, setCurrentSession, loadSessions, loadChatHistory, deleteSession } = useChatStore();
+  const { sessions, currentSession, setCurrentSession, loadSessions, loadChatHistory } = useChatStore();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isTablet = useMediaQuery(theme.breakpoints.down('lg'));
@@ -132,19 +131,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     setSelectedSessionId(null);
   };
 
-  const handleRename = () => {
-    const session = sessions.find(s => s.id === selectedSessionId);
-    if (session) {
-      setNewSessionTitle(session.title || '');
-      setRenameDialogOpen(true);
-    }
-    handleMenuClose();
-  };
-
-  const handleDelete = () => {
-    setDeleteDialogOpen(true);
-    handleMenuClose();
-  };
+  
 
   const handleRenameConfirm = async () => {
     if (selectedSessionId && newSessionTitle.trim()) {
@@ -620,7 +607,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         }}
       >
         <MenuItem onClick={() => {
-           setRenameDialogOpen(true);
+           const session = sessions.find(s => s.id === selectedSessionId);
+           if (session) {
+             setNewSessionTitle(session.title || '');
+             setRenameDialogOpen(true);
+           }
            handleMenuClose();
          }}>
            <EditIcon sx={{ mr: 1, fontSize: 18 }} />

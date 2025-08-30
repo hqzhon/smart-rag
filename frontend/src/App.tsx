@@ -1,4 +1,4 @@
-import React, { useEffect, useState, createContext } from 'react';
+import React, { useState, createContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box, IconButton, Tooltip, Fade, Grow } from '@mui/material';
@@ -14,7 +14,7 @@ import HistoryPage from '@/pages/HistoryPage';
 import DocumentPreviewPage from '@/pages/DocumentPreviewPage';
 
 import Navigation from '@/components/Navigation';
-import { useChatStore } from '@/stores/chatStore';
+
 import { createAppTheme } from './theme';
 import AccessibilityProvider from '@/components/AccessibilityProvider';
 
