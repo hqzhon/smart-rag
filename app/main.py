@@ -173,13 +173,16 @@ async def cleanup_task():
         except Exception as e:
             logger.error(f"后台清理任务出错: {str(e)}")
 
-# 根路径 - 返回前端页面
-@app.get("/")
-async def read_root():
-    """API根路径"""
-    return {"message": "医疗RAG系统API", "docs": "/docs"}
+from starlette.staticfiles import StaticFiles
+from starlette.responses import FileResponse
 
-# 健康检查
+# --- Static files hosting for React Frontend ---
+
+# The directory where the compiled frontend assets are located.
+# This should be the 'static_assets' directory at the project root.
+STATIC_FILES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static_assets"))
+
+# Health check - moved up to ensure it's not caught by the SPA catch-all
 @app.get("/api/v1/health")
 async def health_check():
     """健康检查接口"""
@@ -193,6 +196,33 @@ async def health_check():
             "search_service": search_service is not None
         }
     }
+
+# Mount the 'assets' subdirectory from the build output.
+# Vite typically places JS, CSS, and other assets here.
+# This makes them available under the '/assets' URL path.
+if os.path.exists(os.path.join(STATIC_FILES_DIR, "assets")):
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(STATIC_FILES_DIR, "assets")),
+        name="assets"
+    )
+
+# Catch-all route to serve the 'index.html' for any other path.
+# This is crucial for Single-Page Applications (SPAs) like React,
+# as it allows client-side routing to handle paths like '/chat' or '/files'.
+# This route must be placed *after* all other API routes.
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    """Serves the single-page application's entry point (index.html)."""
+    index_path = os.path.join(STATIC_FILES_DIR, "index.html")
+    
+    # Basic check to see if the index.html exists.
+    if not os.path.exists(index_path):
+        return JSONResponse(
+            status_code=404,
+            content={"message": "Frontend not found. Please build the frontend and place it in the 'static_assets' directory."}
+        )
+    return FileResponse(index_path)
 
 # 文档上传接口
 # 文档上传端点已移至 /api/v1/documents.py 路由中
