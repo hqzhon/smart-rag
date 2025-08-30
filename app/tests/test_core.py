@@ -128,12 +128,12 @@ class TestSessionManager:
     
     @patch('app.core.session_manager.get_embeddings')
     @patch('app.core.session_manager.VectorStore')
-    @patch('app.core.session_manager.HybridRetriever')
-    @patch('app.core.session_manager.QianwenReranker')
+    @patch('app.core.session_manager.create_advanced_fusion_retriever')
+    @patch('app.core.session_manager.create_enhanced_reranker')
     @patch('app.core.session_manager.QueryTransformer')
     @patch('app.core.session_manager.EnhancedRAGWorkflow')
     def test_create_session_success(self, mock_workflow, mock_transformer, 
-                                   mock_reranker, mock_retriever, 
+                                   mock_create_reranker, mock_create_retriever, 
                                    mock_vector_store, mock_embeddings):
         """Test successful session creation"""
         # Mock dependencies

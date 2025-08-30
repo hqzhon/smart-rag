@@ -1,7 +1,7 @@
 """元数据检索功能测试"""
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
-from app.retrieval.retriever import HybridRetriever
+from app.retrieval.fusion_retriever import AdvancedFusionRetriever
 from app.retrieval.query_transformer import QueryTransformer
 from app.storage.vector_store import VectorStore
 
@@ -72,10 +72,12 @@ class TestMetadataRetrieval:
     def hybrid_retriever(self, mock_vector_store, mock_query_transformer):
         """创建混合检索器实例"""
         mock_embedding_model = Mock()
-        return HybridRetriever(
+        from app.retrieval.fusion_retriever import create_advanced_fusion_retriever
+        return create_advanced_fusion_retriever(
             vector_store=mock_vector_store,
             query_transformer=mock_query_transformer,
-            embedding_model=mock_embedding_model
+            embedding_model=mock_embedding_model,
+            config_name="balanced"
         )
     
     @pytest.mark.asyncio
@@ -219,10 +221,12 @@ class TestMetadataRetrieval:
         mock_embedding_model = Mock()
         
         # 创建检索器
-        retriever = HybridRetriever(
+        from app.retrieval.fusion_retriever import create_advanced_fusion_retriever
+        retriever = create_advanced_fusion_retriever(
             vector_store=mock_vector_store,
             query_transformer=mock_query_transformer,
-            embedding_model=mock_embedding_model
+            embedding_model=mock_embedding_model,
+            config_name="balanced"
         )
         
         # Mock the retrieve method to return expected results

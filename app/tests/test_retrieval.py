@@ -6,9 +6,9 @@
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 
-from app.retrieval.retriever import HybridRetriever
-from app.retrieval.bm25_retriever import RankBM25Retriever
-from app.retrieval.reranker import QianwenReranker
+from app.retrieval.fusion_retriever import AdvancedFusionRetriever
+from app.retrieval.multi_field_bm25 import RankBM25Retriever
+from app.retrieval.enhanced_reranker import EnhancedReranker
 from app.retrieval.query_transformer import QueryTransformer
 
 
@@ -18,10 +18,12 @@ class TestRetriever:
     @pytest.fixture
     async def retriever(self, mock_vector_store, mock_query_transformer):
         """创建检索器实例"""
-        retriever = HybridRetriever(
+        from app.retrieval.fusion_retriever import create_advanced_fusion_retriever
+        retriever = create_advanced_fusion_retriever(
             vector_store=mock_vector_store, 
             query_transformer=mock_query_transformer,
-            embedding_model=Mock()
+            embedding_model=Mock(),
+            config_name="balanced"
         )
         return retriever
     
@@ -96,43 +98,45 @@ class TestRetriever:
             assert mock_retrieve.call_count == 3
 
 
-class TestHybridRetriever:
-    """混合检索器测试类"""
+class TestAdvancedFusionRetriever:
+    """高级融合检索器测试类"""
     
     @pytest.fixture
     def hybrid_retriever(self, mock_vector_store, mock_query_transformer):
-        """创建混合检索器实例"""
+        """创建高级融合检索器实例"""
         mock_embedding_model = Mock()
         mock_embedding_model.embed_query = AsyncMock(return_value=[0.1, 0.2, 0.3])
         mock_embedding_model.embed_documents = AsyncMock(return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
         
-        retriever = HybridRetriever(
+        from app.retrieval.fusion_retriever import create_advanced_fusion_retriever
+        retriever = create_advanced_fusion_retriever(
             vector_store=mock_vector_store,
             query_transformer=mock_query_transformer,
-            embedding_model=mock_embedding_model
+            embedding_model=mock_embedding_model,
+            config_name="balanced"
         )
         return retriever
     
     @pytest.mark.asyncio
     async def test_retrieve(self, hybrid_retriever, mock_vector_store):
-        """测试混合检索功能"""
+        """测试高级融合检索功能"""
         # 设置模拟返回值 - 使用similarity_search方法
         mock_vector_store.similarity_search.return_value = [
             {"id": "id1", "content": "相关内容1", "metadata": {"source": "doc1.pdf"}},
             {"id": "id2", "content": "相关内容2", "metadata": {"source": "doc2.pdf"}}
         ]
         
-        # 执行混合检索
+        # 执行高级融合检索
         results = await hybrid_retriever.retrieve("测试查询", top_k=2)
         
         # 验证结果
         assert isinstance(results, list)
-        # 由于涉及复杂的BM25和向量融合，我们主要验证方法被调用
+        # 由于涉及复杂的多策略融合，我们主要验证方法被调用
         mock_vector_store.similarity_search.assert_called()
     
     @pytest.mark.asyncio
     async def test_retrieve_with_metadata_filter(self, hybrid_retriever, mock_vector_store, mock_query_transformer):
-        """测试带元数据过滤的混合检索功能"""
+        """测试带元数据过滤的高级融合检索功能"""
         # 设置查询转换器返回关键词
         mock_query_transformer.extract_keywords.return_value = ["高血压", "治疗"]
         
@@ -142,7 +146,7 @@ class TestHybridRetriever:
             {"id": "id2", "content": "相关内容2", "metadata": {"source": "doc2.pdf"}}
         ]
         
-        # 执行带元数据过滤的混合检索
+        # 执行带元数据过滤的高级融合检索
         results = await hybrid_retriever.retrieve("高血压治疗", top_k=2, use_metadata_filter=True)
         
         # 验证结果
@@ -162,9 +166,9 @@ class TestRankBM25Retriever:
         """创建BM25检索器实例"""
         # 模拟文档集合
         documents = [
-            {"id": "doc1", "content": "高血压是一种常见的慢性疾病", "metadata": {"source": "doc1.pdf"}},
-            {"id": "doc2", "content": "糖尿病是一种代谢性疾病", "metadata": {"source": "doc2.pdf"}},
-            {"id": "doc3", "content": "心脏病是心血管系统的疾病", "metadata": {"source": "doc3.pdf"}}
+            {"id": "doc1", "content": "高血压是一种常见的慢性疾病", "metadata": {"source": "doc1.pdf", "keywords": "高血压 慢性疾病 医学"}},
+            {"id": "doc2", "content": "糖尿病是一种代谢性疾病", "metadata": {"source": "doc2.pdf", "keywords": "糖尿病 代谢性疾病 医学"}},
+            {"id": "doc3", "content": "心脏病是心血管系统的疾病", "metadata": {"source": "doc3.pdf", "keywords": "心脏病 心血管 疾病"}}
         ]
         
         # 创建BM25检索器
@@ -200,13 +204,13 @@ class TestRankBM25Retriever:
         assert scores["doc1"] > 0  # 相关文档的分数应该大于0
 
 
-class TestQianwenReranker:
-    """千问重排序器测试类"""
+class TestEnhancedReranker:
+    """增强重排序器测试类"""
     
     @pytest.fixture
     def reranker(self):
-        """创建重排序器实例"""
-        return QianwenReranker()
+        """创建增强重排序器实例"""
+        return EnhancedReranker()
     
     @pytest.mark.asyncio
     async def test_rerank_documents(self, reranker):

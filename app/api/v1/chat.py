@@ -11,8 +11,8 @@ import asyncio
 from app.utils.logger import setup_logger
 from app.storage.database import DatabaseManager
 from app.storage.vector_store import VectorStore
-from app.retrieval.retriever import HybridRetriever
-from app.retrieval.reranker import QianwenReranker
+from app.retrieval.fusion_retriever import AdvancedFusionRetriever, create_advanced_fusion_retriever
+from app.retrieval.enhanced_reranker import EnhancedReranker, create_enhanced_reranker
 from app.retrieval.query_transformer import QueryTransformer
 from app.workflow.enhanced_rag_workflow import EnhancedRAGWorkflow
 from app.models.query_models import QueryRequest, QueryResponse
@@ -186,11 +186,44 @@ async def get_global_rag_workflow() -> Optional[EnhancedRAGWorkflow]:
             db = DatabaseManager()
             
             # 获取所有文档内容
-            documents = db.get_all_documents_content()
+            raw_documents = db.get_all_documents_content()
             
-            if not documents:
+            if not raw_documents:
                 logger.warning("没有找到任何文档，RAG工作流无法初始化")
                 return None
+            
+            # 为文档添加keywords和summary字段以支持MultiFieldBM25Retriever
+            documents = []
+            for doc in raw_documents:
+                # 创建增强的文档副本
+                enhanced_doc = doc.copy()
+                
+                # 从title和content生成keywords（简单的关键词提取）
+                title = doc.get('title', '')
+                content = doc.get('content', '')
+                
+                # 生成keywords：取title中的词汇和content的前几个词
+                keywords = []
+                if title:
+                    keywords.extend(title.split()[:5])  # 取title的前5个词
+                if content:
+                    # 取content的前20个字符作为关键词
+                    content_words = content.replace('\n', ' ').split()[:10]
+                    keywords.extend(content_words)
+                
+                # 生成summary：取content的前200个字符
+                summary = content[:200] + '...' if len(content) > 200 else content
+                
+                # 添加到metadata中
+                if 'metadata' not in enhanced_doc:
+                    enhanced_doc['metadata'] = {}
+                
+                enhanced_doc['metadata']['keywords'] = keywords
+                enhanced_doc['metadata']['summary'] = summary
+                
+                documents.append(enhanced_doc)
+            
+            logger.info(f"为 {len(documents)} 个文档添加了keywords和summary字段")
             
             # 初始化向量存储
             vector_store = VectorStore()
@@ -202,15 +235,19 @@ async def get_global_rag_workflow() -> Optional[EnhancedRAGWorkflow]:
             # 初始化查询转换器
             query_transformer = QueryTransformer()
             
-            # 初始化检索器
-            retriever = HybridRetriever(
-                vector_store=vector_store, 
-                query_transformer=query_transformer,
-                embedding_model=embedding_model
+            # 初始化检索器 - 使用最新的优化逻辑
+            retriever = await create_advanced_fusion_retriever(
+                vector_store=vector_store,
+                documents=documents,
+                config_name='balanced',
+                enable_all_optimizations=True
             )
             
-            # 初始化重排序器
-            reranker = QianwenReranker()
+            # 初始化重排序器 - 使用增强版本
+            reranker = create_enhanced_reranker(
+                strategy='qianwen_api',
+                enable_cache=True
+            )
             
             # 创建RAG工作流
             _global_rag_workflow = EnhancedRAGWorkflow(

@@ -9,8 +9,8 @@ from datetime import datetime
 
 from app.workflow.deepseek_client import get_deepseek_client
 from app.workflow.qianwen_client import get_qianwen_client
-from app.retrieval.retriever import HybridRetriever
-from app.retrieval.reranker import QianwenReranker
+from app.retrieval.fusion_retriever import AdvancedFusionRetriever
+from app.retrieval.enhanced_reranker import EnhancedReranker
 from app.retrieval.query_transformer import QueryTransformer
 from app.utils.logger import setup_logger
 
@@ -20,36 +20,45 @@ logger = setup_logger(__name__)
 class EnhancedRAGWorkflow:
     """增强版RAG工作流，使用Deepseek和千问API (全异步)"""
     
-    def __init__(self, retriever: HybridRetriever, reranker: QianwenReranker, query_transformer: QueryTransformer):
+    def __init__(self, retriever: AdvancedFusionRetriever, reranker: EnhancedReranker, query_transformer: QueryTransformer):
         """初始化增强版RAG工作流
         
         Args:
-            retriever: 异步检索器实例
-            reranker: 异步重排序器实例  
+            retriever: 高级融合检索器实例
+            reranker: 增强重排序器实例  
             query_transformer: 查询转换器实例
         """
         self.retriever = retriever
         self.reranker = reranker
         self.query_transformer = query_transformer
         
-        logger.info("增强版RAG工作流初始化完成")
+        logger.info("增强版RAG工作流初始化完成 - 使用最新优化逻辑")
     
     async def process_query(self, query: str, session_id: Optional[str] = None, use_metadata_retrieval: bool = False) -> Dict[str, Any]:
         """异步处理用户查询的完整流程"""
         try:
             logger.info(f"开始处理查询: {query}")
             
+            # 使用查询转换器优化查询
             expanded_queries = self.query_transformer.expand_query(query)
             rewritten_query = self.query_transformer.rewrite_query(query)
             
+            # 使用最新的优化检索逻辑
             if len(expanded_queries) > 1:
-                retrieved_docs = await self.retriever.multi_query_retrieve(expanded_queries, top_k=10)
-            else:
-                retrieved_docs = await self.retriever.adaptive_retrieve(
-                    rewritten_query, 
-                    top_k=10, 
-                    use_metadata_filter=use_metadata_retrieval
+                # 对于多查询，使用第一个扩展查询作为主查询
+                primary_query = expanded_queries[0]
+                retrieved_result = await self.retriever.retrieve_optimized(
+                    primary_query,
+                    final_top_k=10
                 )
+                retrieved_docs = retrieved_result.documents
+            else:
+                # 使用优化的检索方法
+                retrieved_result = await self.retriever.retrieve_optimized(
+                    rewritten_query,
+                    final_top_k=10
+                )
+                retrieved_docs = retrieved_result.documents
             logger.info(f"Retrieved docs: {retrieved_docs}")
             
             if not retrieved_docs:
@@ -65,8 +74,10 @@ class EnhancedRAGWorkflow:
                     "metadata": {}
                 }
             
-            reranked_docs = await self.reranker.rerank_documents(query, retrieved_docs, top_k=5)
-            logger.info(f"Reranked docs: {reranked_docs}")
+            # 使用增强重排序器进行重排序
+            rerank_result = await self.reranker.rerank_documents(query, retrieved_docs, top_k=5)
+            reranked_docs = rerank_result.documents
+            logger.info(f"Reranked docs: {len(reranked_docs)} documents, strategy: {rerank_result.strategy_used}")
             
             context = self._build_context(reranked_docs)
             logger.info(f"Context: {context}")
@@ -76,7 +87,7 @@ class EnhancedRAGWorkflow:
             
             final_response = self._post_process_response(response)
             
-            reference_docs = [doc['page_content'][:200] + "..." for doc in reranked_docs[:3]]
+            reference_docs = [doc.get('page_content', doc.get('content', ''))[:200] + "..." for doc in reranked_docs[:3]]
             
             # 构建sources，确保文件名正确显示
             sources = []
@@ -125,7 +136,7 @@ class EnhancedRAGWorkflow:
                 updated_metadata['source'] = doc_name
                 
                 sources.append({
-                    "content": doc['page_content'][:200], 
+                    "content": doc.get('page_content', doc.get('content', ''))[:200], 
                     "score": doc.get('rerank_score', 0.0), 
                     "metadata": updated_metadata
                 })
@@ -238,14 +249,25 @@ class EnhancedRAGWorkflow:
         
         try:
             yield {"type": "status", "message": "正在分析查询..."}
+            # 使用查询转换器优化查询
+            expanded_queries = self.query_transformer.expand_query(query)
             rewritten_query = self.query_transformer.rewrite_query(query)
             
-            yield {"type": "status", "message": "正在检索相关医疗文档..."}
-            retrieved_docs = await self.retriever.adaptive_retrieve(
-                rewritten_query, 
-                top_k=10, 
-                use_metadata_filter=use_metadata_retrieval
-            )
+            yield {"type": "status", "message": "正在使用智能检索策略..."}
+            # 使用最新的优化检索逻辑
+            if len(expanded_queries) > 1:
+                primary_query = expanded_queries[0]
+                retrieved_result = await self.retriever.retrieve_optimized(
+                    primary_query,
+                    final_top_k=10
+                )
+                retrieved_docs = retrieved_result.documents
+            else:
+                retrieved_result = await self.retriever.retrieve_optimized(
+                    rewritten_query,
+                    final_top_k=10
+                )
+                retrieved_docs = retrieved_result.documents
             
             if not retrieved_docs:
                 no_result_msg = "抱歉，我没有找到相关的医疗信息。"
@@ -255,8 +277,10 @@ class EnhancedRAGWorkflow:
                     await self._save_chat_history(session_id, query, no_result_msg, [])
                 return
             
-            yield {"type": "status", "message": "正在使用AI重排序文档..."}
-            reranked_docs = await self.reranker.rerank_documents(query, retrieved_docs, top_k=5)
+            yield {"type": "status", "message": "正在使用增强AI重排序..."}
+            # 使用增强重排序器进行重排序
+            rerank_result = await self.reranker.rerank_documents(query, retrieved_docs, top_k=5)
+            reranked_docs = rerank_result.documents
             
             yield {"type": "status", "message": "正在生成专业医疗回答..."}
             context = self._build_context(reranked_docs)

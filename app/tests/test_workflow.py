@@ -29,9 +29,26 @@ class TestEnhancedRAGWorkflow:
     @pytest.mark.asyncio
     async def test_process_query_empty(self, mock_retriever, mock_reranker, mock_query_transformer, mock_deepseek_client):
         """测试空查询处理"""
+        from app.retrieval.fusion_retriever import OptimizedFusionResult
+        from app.retrieval.advanced_config import FusionMethod
+        
         with patch('app.workflow.enhanced_rag_workflow.get_deepseek_client', return_value=mock_deepseek_client):
             workflow = EnhancedRAGWorkflow(mock_retriever, mock_reranker, mock_query_transformer)
-            # 设置检索返回空结果
+            
+            # 设置检索返回空结果 - 创建空的 OptimizedFusionResult
+            empty_result = OptimizedFusionResult(
+                documents=[],
+                total_time=0.1,
+                path_results={},
+                fusion_method=FusionMethod.WEIGHTED_RRF,
+                query_analysis=None,
+                progressive_stages=None,
+                weight_adjustments=None,
+                optimization_stats={},
+                config_used={}
+            )
+            
+            mock_retriever.retrieve_optimized.return_value = empty_result
             mock_retriever.adaptive_retrieve.return_value = []
             mock_retriever.multi_query_retrieve.return_value = []
             
@@ -51,12 +68,7 @@ class TestEnhancedRAGWorkflow:
         mock_deepseek_client.__aenter__.return_value = mock_deepseek_client
         with patch('app.workflow.enhanced_rag_workflow.get_deepseek_client', return_value=mock_deepseek_client):
             workflow = EnhancedRAGWorkflow(mock_retriever, mock_reranker, mock_query_transformer)
-            mock_retriever.multi_query_retrieve.return_value = [
-                {'page_content': '多查询内容', 'metadata': {'source': 'doc3.pdf', 'score': 0.90}}
-            ]
-            mock_reranker.rerank_documents.return_value = [
-                {'page_content': '重排序内容', 'metadata': {'source': 'doc1.pdf', 'score': 0.98}, 'rerank_score': 0.98}
-            ]
+            # mock_reranker 已经在 conftest.py 中配置了正确的 RerankResult 返回值
             result = await workflow.process_query("什么是高血压？")
             
             assert result is not None
@@ -64,8 +76,8 @@ class TestEnhancedRAGWorkflow:
             assert "response" in result
             assert "documents" in result
             
-            # 验证组件调用 - 使用更宽松的验证，因为实际调用可能有所不同
-            assert mock_retriever.multi_query_retrieve.called or mock_retriever.adaptive_retrieve.called
+            # 验证组件调用 - 检查实际调用的方法
+            mock_retriever.retrieve_optimized.assert_called_once()
             mock_deepseek_client.generate_response.assert_called_once()
     
     @pytest.mark.asyncio
@@ -74,12 +86,7 @@ class TestEnhancedRAGWorkflow:
         with patch('app.workflow.enhanced_rag_workflow.get_deepseek_client', return_value=mock_deepseek_client):
             workflow = EnhancedRAGWorkflow(mock_retriever, mock_reranker, mock_query_transformer)
             mock_query_transformer.expand_query.return_value = ["扩展查询1", "扩展查询2"]
-            mock_retriever.multi_query_retrieve.return_value = [
-                {'page_content': '多查询内容', 'metadata': {'source': 'doc3.pdf', 'score': 0.90}}
-            ]
-            mock_reranker.rerank_documents.return_value = [
-                {'page_content': '重排序内容', 'metadata': {'source': 'doc1.pdf', 'score': 0.98}, 'rerank_score': 0.98}
-            ]
+            # mock_reranker 已经在 conftest.py 中配置了正确的 RerankResult 返回值
 
             result = await workflow.process_query("什么是高血压？")
             
@@ -88,8 +95,8 @@ class TestEnhancedRAGWorkflow:
             assert "response" in result
             assert "documents" in result
             
-            # 验证使用了多查询检索
-            mock_retriever.multi_query_retrieve.assert_called_once()
+            # 验证使用了优化检索
+            mock_retriever.retrieve_optimized.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_process_query_no_documents(self, mock_retriever, mock_reranker, mock_query_transformer, mock_deepseek_client):
@@ -97,8 +104,21 @@ class TestEnhancedRAGWorkflow:
         with patch('app.workflow.enhanced_rag_workflow.get_deepseek_client', return_value=mock_deepseek_client):
             workflow = EnhancedRAGWorkflow(mock_retriever, mock_reranker, mock_query_transformer)
             # 设置检索返回空结果
-            mock_retriever.adaptive_retrieve.return_value = []
-            mock_retriever.multi_query_retrieve.return_value = []
+            from app.retrieval.fusion_retriever import OptimizedFusionResult
+            from app.retrieval.advanced_config import FusionMethod
+            
+            empty_result = OptimizedFusionResult(
+                documents=[],
+                total_time=0.1,
+                path_results={},
+                fusion_method=FusionMethod.WEIGHTED_RRF,
+                query_analysis=None,
+                progressive_stages=None,
+                weight_adjustments=None,
+                optimization_stats={},
+                config_used={}
+            )
+            mock_retriever.retrieve_optimized.return_value = empty_result
             
             result = await workflow.process_query("什么是高血压？")
             
@@ -112,8 +132,7 @@ class TestEnhancedRAGWorkflow:
         with patch('app.workflow.enhanced_rag_workflow.get_deepseek_client', return_value=mock_deepseek_client):
             workflow = EnhancedRAGWorkflow(mock_retriever, mock_reranker, mock_query_transformer)
             # 设置检索器抛出异常
-            mock_retriever.adaptive_retrieve.side_effect = Exception("检索失败")
-            mock_retriever.multi_query_retrieve.side_effect = Exception("检索失败")
+            mock_retriever.retrieve_optimized.side_effect = Exception("检索失败")
             
             result = await workflow.process_query("什么是高血压？")
             

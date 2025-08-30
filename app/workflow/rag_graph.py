@@ -74,7 +74,7 @@ class RAGWorkflow:
             final_response = self._post_process_response(response, query)
             
             # 7. 提取参考文档
-            reference_docs = [doc['page_content'][:200] + "..." for doc in reranked_docs[:3]]
+            reference_docs = [doc.get('page_content', doc.get('content', ''))[:200] + "..." for doc in reranked_docs[:3]]
             
             result = {
                 "query": query,
@@ -105,7 +105,7 @@ class RAGWorkflow:
         context_parts = []
         
         for i, doc in enumerate(documents, 1):
-            content = doc['page_content']
+            content = doc.get('page_content', doc.get('content', ''))
             metadata = doc.get('metadata', {})
             source = metadata.get('source', '未知来源')
             
@@ -200,7 +200,7 @@ class RAGWorkflow:
             final_response = self._post_process_response(response, query)
             
             # 返回最终结果
-            reference_docs = [doc['page_content'][:200] + "..." for doc in reranked_docs[:3]]
+            reference_docs = [doc.get('page_content', doc.get('content', ''))[:200] + "..." for doc in reranked_docs[:3]]
             
             yield {
                 "type": "result",

@@ -22,7 +22,7 @@ class SessionManager(metaclass=SingletonMeta):
         self.cleanup_interval = 300  # 5分钟清理一次
         self._initialized = True
     
-    def create_session(self, session_id: str, documents: List[Dict[str, Any]]) -> bool:
+    async def create_session(self, session_id: str, documents: List[Dict[str, Any]]) -> bool:
         """创建新会话，使用已存在的向量数据库
         
         Args:
@@ -36,8 +36,8 @@ class SessionManager(metaclass=SingletonMeta):
             # 延迟导入避免循环依赖
             from app.embeddings.embeddings import get_embeddings
             from app.storage.vector_store import VectorStore
-            from app.retrieval.retriever import HybridRetriever
-            from app.retrieval.reranker import QianwenReranker
+            from app.retrieval.fusion_retriever import AdvancedFusionRetriever, create_advanced_fusion_retriever
+            from app.retrieval.enhanced_reranker import EnhancedReranker, create_enhanced_reranker
             from app.retrieval.query_transformer import QueryTransformer
             from app.workflow.enhanced_rag_workflow import EnhancedRAGWorkflow
             
@@ -86,11 +86,19 @@ class SessionManager(metaclass=SingletonMeta):
             # 初始化查询转换器
             query_transformer = QueryTransformer()
             
-            # 初始化检索器
-            retriever = HybridRetriever(vector_store, query_transformer, embedding_model)
+            # 初始化检索器 - 使用最新的优化逻辑
+            retriever = await create_advanced_fusion_retriever(
+                vector_store=vector_store,
+                documents=formatted_documents,
+                config_name='balanced',
+                enable_all_optimizations=True
+            )
             
-            # 初始化重排序器
-            reranker = QianwenReranker()
+            # 初始化重排序器 - 使用增强版本
+            reranker = create_enhanced_reranker(
+                strategy='qianwen_api',
+                enable_cache=True
+            )
             
             # 初始化增强版RAG工作流
             rag_workflow = EnhancedRAGWorkflow(retriever, reranker, query_transformer)

@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.models.query_models import SearchResult, QueryAnalysis
 from app.retrieval.query_transformer import QueryTransformer
-from app.retrieval.retriever import HybridRetriever
+from app.retrieval.fusion_retriever import AdvancedFusionRetriever, create_advanced_fusion_retriever
 from app.storage.vector_store import VectorStore
 from app.storage.database import get_db_manager_async
 from app.embeddings.embeddings import QianwenEmbeddings
@@ -39,15 +39,16 @@ class SearchService:
         self.vector_store = await self._get_vector_store()
         self.embeddings = await self._get_embeddings()
         
-        # 初始化检索器
-        self.retriever = HybridRetriever(
-            vector_store=self.vector_store,
-            query_transformer=self.query_transformer,
-            embedding_model=self.embeddings
-        )
-        
-        # 预加载文档内容
+        # 预加载文档内容 - 必须在创建检索器之前
         self.documents_content = await self._get_documents_content()
+        
+        # 初始化检索器 - 使用最新的优化逻辑
+        self.retriever = await create_advanced_fusion_retriever(
+            vector_store=self.vector_store,
+            documents=self.documents_content,
+            config_name='balanced',
+            enable_all_optimizations=True
+        )
         
         logger.info("搜索服务异步初始化完成")
     
@@ -69,10 +70,34 @@ class SearchService:
         return QianwenEmbeddings()
     
     async def _get_documents_content(self):
-        """异步获取文档内容"""
-        if self.db_manager:
-            return await self.db_manager.get_all_documents_content_async()
-        return []
+        """异步获取文档内容 - 从向量数据库获取以包含 keywords 和 summary"""
+        try:
+            # 从向量数据库获取所有文档，这样可以获得包含 keywords 和 summary 的 metadata
+            collection_data = self.vector_store.collection.get()
+            
+            documents = []
+            ids = collection_data.get('ids', [])
+            metadatas = collection_data.get('metadatas', [])
+            documents_data = collection_data.get('documents', [])
+            
+            for i in range(len(ids)):
+                doc = {
+                    'id': ids[i],
+                    'content': documents_data[i] if i < len(documents_data) else '',
+                    'metadata': metadatas[i] if i < len(metadatas) else {}
+                }
+                documents.append(doc)
+            
+            logger.info(f"从向量数据库获取到 {len(documents)} 个文档")
+            return documents
+            
+        except Exception as e:
+            logger.error(f"从向量数据库获取文档内容时出错: {str(e)}")
+            # 如果向量数据库获取失败，回退到数据库
+            if self.db_manager:
+                logger.info("回退到从 MySQL 数据库获取文档内容")
+                return await self.db_manager.get_all_documents_content_async()
+            return []
     
     async def search_documents(self, query: str, session_id: Optional[str] = None, 
                              limit: int = 10, threshold: float = 0.5) -> List[SearchResult]:

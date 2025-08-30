@@ -10,8 +10,8 @@ from unittest.mock import Mock, AsyncMock, MagicMock
 
 from app.storage.database import DatabaseManager
 from app.storage.vector_store import VectorStore
-from app.retrieval.retriever import HybridRetriever
-from app.retrieval.bm25_retriever import RankBM25Retriever
+from app.retrieval.fusion_retriever import AdvancedFusionRetriever
+from app.retrieval.multi_field_bm25 import RankBM25Retriever
 from app.retrieval.reranker import QianwenReranker
 from app.retrieval.query_transformer import QueryTransformer
 from app.workflow.deepseek_client import DeepseekClient
@@ -71,22 +71,37 @@ def mock_vector_store():
 @pytest.fixture
 def mock_retriever():
     """创建模拟检索器"""
-    mock = AsyncMock(spec=HybridRetriever)
+    from app.retrieval.fusion_retriever import OptimizedFusionResult
+    from app.retrieval.advanced_config import RetrievalPath, FusionMethod
     
-    # 模拟方法
-    mock.retrieve.return_value = [
+    mock = AsyncMock(spec=AdvancedFusionRetriever)
+    
+    # 模拟文档结果
+    mock_documents = [
         {"id": "id1", "content": "相关内容1", "metadata": {"source": "doc1.pdf"}, "score": 0.95},
         {"id": "id2", "content": "相关内容2", "metadata": {"source": "doc2.pdf"}, "score": 0.85}
     ]
-    mock.adaptive_retrieve.return_value = [
-        {"id": "id1", "content": "相关内容1", "metadata": {"source": "doc1.pdf"}, "score": 0.95},
-        {"id": "id2", "content": "相关内容2", "metadata": {"source": "doc2.pdf"}, "score": 0.85}
-    ]
-    mock.multi_query_retrieve.return_value = [
-        {"id": "id1", "content": "相关内容1", "metadata": {"source": "doc1.pdf"}, "score": 0.95},
-        {"id": "id2", "content": "相关内容2", "metadata": {"source": "doc2.pdf"}, "score": 0.85},
-        {"id": "id3", "content": "相关内容3", "metadata": {"source": "doc3.pdf"}, "score": 0.75}
-    ]
+    
+    # 创建模拟的 OptimizedFusionResult 对象
+    mock_optimized_result = OptimizedFusionResult(
+        documents=mock_documents,
+        total_time=0.1,
+        path_results={},
+        fusion_method=FusionMethod.WEIGHTED_RRF,
+        query_analysis=None,
+        progressive_stages=None,
+        weight_adjustments=None,
+        optimization_stats={},
+        config_used={}
+    )
+    
+    mock.retrieve_optimized = AsyncMock(return_value=mock_optimized_result)
+    mock.retrieve = AsyncMock(return_value=mock_documents)
+    mock.adaptive_retrieve = AsyncMock(return_value=mock_documents)
+    mock.retrieve_single_path = AsyncMock(return_value=mock_documents)
+    mock.multi_query_retrieve = AsyncMock(return_value=mock_documents)
+    mock.update_config = Mock()
+    mock.get_performance_stats = Mock(return_value={})
     
     return mock
 
@@ -109,14 +124,25 @@ def mock_qianwen_embedding_rerank_client():
 
 @pytest.fixture
 def mock_reranker():
-    """创建模拟千问重排序器"""
-    mock = AsyncMock(spec=QianwenReranker)
+    """创建模拟增强重排序器"""
+    from app.retrieval.enhanced_reranker import RerankResult, RerankStrategy
+    
+    mock = AsyncMock()
+    
+    # 创建模拟的 RerankResult 对象
+    mock_rerank_result = RerankResult(
+        documents=[
+            {"id": "id2", "content": "相关内容2", "page_content": "相关内容2", "metadata": {"source": "doc2.pdf"}, "score": 0.95, "rerank_score": 0.98},
+            {"id": "id1", "content": "相关内容1", "page_content": "相关内容1", "metadata": {"source": "doc1.pdf"}, "score": 0.85, "rerank_score": 0.88}
+        ],
+        rerank_time=0.1,
+        strategy_used=RerankStrategy.QIANWEN_API,
+        cache_hit=False,
+        api_calls=1
+    )
     
     # 模拟方法
-    mock.rerank_documents.return_value = [
-        {"id": "id2", "content": "相关内容2", "metadata": {"source": "doc2.pdf"}, "score": 0.95, "rerank_score": 0.98},
-        {"id": "id1", "content": "相关内容1", "metadata": {"source": "doc1.pdf"}, "score": 0.85, "rerank_score": 0.88}
-    ]
+    mock.rerank_documents.return_value = mock_rerank_result
     
     return mock
 

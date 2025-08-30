@@ -63,7 +63,7 @@ class ChatService:
             documents = db.get_all_documents_content()
             
             # 创建会话，即使没有文档也允许创建
-            success = self.session_manager.create_session(session_id, documents or [])
+            success = await self.session_manager.create_session(session_id, documents or [])
             if not success:
                 raise Exception("创建会话失败")
             
@@ -117,7 +117,7 @@ class ChatService:
                 
                 # 重新创建内存中的会话
                 documents = db.get_all_documents_content()
-                success = self.session_manager.create_session(request.session_id, documents or [])
+                success = await self.session_manager.create_session(request.session_id, documents or [])
                 if not success:
                     raise Exception(f"无法重新创建会话: {request.session_id}")
                 
