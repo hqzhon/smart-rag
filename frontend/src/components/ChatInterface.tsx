@@ -83,12 +83,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: 'background.default',
+        background: 'linear-gradient(135deg, rgba(246, 249, 252, 0.8) 0%, rgba(238, 243, 248, 0.8) 100%)',
+        backdropFilter: 'blur(20px)',
         minHeight: 0, // 确保flex子元素可以收缩
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: `
+            radial-gradient(circle at 15% 30%, rgba(103, 126, 234, 0.03) 0%, transparent 50%),
+            radial-gradient(circle at 85% 70%, rgba(217, 70, 239, 0.03) 0%, transparent 50%),
+            radial-gradient(circle at 50% 80%, rgba(14, 165, 233, 0.02) 0%, transparent 50%)
+          `,
+          pointerEvents: 'none',
+          zIndex: 0,
+        },
       }}
     >
 
-      {/* 加载指示器 */}
+      {/* 现代化加载指示器 */}
       <Fade in={isLoading} timeout={300}>
         <LinearProgress
           sx={{
@@ -97,6 +115,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
             left: 0,
             right: 0,
             zIndex: 1000,
+            height: 3,
+            background: 'rgba(255, 255, 255, 0.3)',
+            '& .MuiLinearProgress-bar': {
+              background: 'linear-gradient(90deg, #667eea, #764ba2, #9c88ff)',
+              animation: 'shimmer 1.5s infinite ease-in-out',
+            },
+            '@keyframes shimmer': {
+              '0%': {
+                transform: 'translateX(-100%)',
+              },
+              '100%': {
+                transform: 'translateX(100%)',
+              },
+            },
           }}
         />
       </Fade>
@@ -168,17 +200,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
         <Paper
           elevation={0}
           sx={{
-            borderTop: '1px solid',
-            borderColor: 'divider',
-            background: 'rgba(255, 255, 255, 0.8)',
-            backdropFilter: 'blur(10px)',
+            borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(20px)',
             position: 'sticky',
             bottom: 0,
             zIndex: 10,
             flexShrink: 0, // 防止输入框被压缩
+            borderRadius: 0,
+            boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.1)',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 1,
+              background: 'linear-gradient(90deg, transparent, rgba(103, 126, 234, 0.3), transparent)',
+            },
           }}
         >
-          <Container maxWidth={false} sx={{ px: 2 }}>
+          <Container maxWidth={false} sx={{ px: 3, py: 2 }}>
             <AnimatedBox animation="fadeInUp" delay="0.3s">
               <Box sx={{ py: 1 }}>
                 <ChatInput

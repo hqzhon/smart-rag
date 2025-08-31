@@ -69,22 +69,37 @@ const MessageList: React.FC<MessageListProps> = ({
         sx={{
           flexGrow: 1,
           overflow: 'auto',
-          py: 2,
-          px: 1,
+          py: 3,
+          px: 2,
+          background: 'transparent',
+          position: 'relative',
+          zIndex: 1,
           '&::-webkit-scrollbar': {
-            width: '6px',
+            width: '8px',
           },
           '&::-webkit-scrollbar-track': {
-            background: 'rgba(0,0,0,0.05)',
-            borderRadius: '3px',
+            background: 'rgba(0, 0, 0, 0.02)',
+            borderRadius: '12px',
+            margin: '8px',
           },
           '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(0,0,0,0.2)',
-            borderRadius: '3px',
+            background: 'linear-gradient(135deg, rgba(103, 126, 234, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%)',
+            borderRadius: '12px',
+            border: '2px solid transparent',
+            backgroundClip: 'content-box',
+            transition: 'all 0.3s ease',
             '&:hover': {
-              background: 'rgba(0,0,0,0.3)',
+              background: 'linear-gradient(135deg, rgba(103, 126, 234, 0.5) 0%, rgba(217, 70, 239, 0.5) 100%)',
+              backgroundClip: 'content-box',
+              transform: 'scaleY(1.2)',
             },
           },
+          '&::-webkit-scrollbar-corner': {
+            background: 'transparent',
+          },
+          // 火狐浏览器滚动条
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(103, 126, 234, 0.3) transparent',
         }}
       >
         {shouldUseVirtualization ? (

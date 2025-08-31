@@ -1,4 +1,4 @@
-/* 全局样式 */
+/* 全局样式 - 现代化医疗系统 */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -8,35 +8,72 @@
 html,
 body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #f6f9fc 0%, #eef3f8 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
 }
 
 #root {
   height: 100%;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 滚动条样式 */
+/* 现代化背景效果 */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(103, 126, 234, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(217, 70, 239, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(14, 165, 233, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 现代化滚动条样式 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+  margin: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: linear-gradient(135deg, rgba(103, 126, 234, 0.3) 0%, rgba(217, 70, 239, 0.3) 100%);
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: all 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: linear-gradient(135deg, rgba(103, 126, 234, 0.6) 0%, rgba(217, 70, 239, 0.6) 100%);
+  background-clip: content-box;
+  transform: scale(1.1);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 火狐浏览器滚动条 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(103, 126, 234, 0.3) transparent;
 }
 
 /* 响应式断点 */
@@ -52,11 +89,11 @@ body {
   }
 }
 
-/* 动画 */
+/* 现代化动画效果 */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
@@ -64,8 +101,104 @@ body {
   }
 }
 
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40%, 43% {
+    transform: translateY(-20px);
+  }
+  70% {
+    transform: translateY(-10px);
+  }
+  90% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(103, 126, 234, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(103, 126, 234, 0.6), 0 0 30px rgba(217, 70, 239, 0.4);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
 .fade-in {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scale-in {
+  animation: scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 加载动画 */
@@ -74,8 +207,19 @@ body {
   100% { transform: rotate(360deg); }
 }
 
+@keyframes spinGlow {
+  0% { 
+    transform: rotate(0deg);
+    filter: hue-rotate(0deg);
+  }
+  100% { 
+    transform: rotate(360deg);
+    filter: hue-rotate(360deg);
+  }
+}
+
 .loading-spinner {
-  animation: spin 1s linear infinite;
+  animation: spinGlow 2s linear infinite;
 }
 
 /* 打字机效果 */
@@ -84,179 +228,582 @@ body {
   to { width: 100%; }
 }
 
+@keyframes blink {
+  0%, 50% { border-color: transparent; }
+  51%, 100% { border-color: currentColor; }
+}
+
 .typewriter {
   overflow: hidden;
   border-right: 2px solid;
   white-space: nowrap;
-  animation: typing 2s steps(40, end);
+  animation: typing 2s steps(40, end), blink 1s infinite;
 }
 
-/* 消息气泡样式 */
+/* 悬浮效果 */
+.hover-lift {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.hover-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-glow:hover {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* 现代化消息气泡样式 */
 .message-bubble {
   max-width: 80%;
-  padding: 12px 16px;
-  border-radius: 18px;
-  margin: 8px 0;
+  padding: 16px 20px;
+  border-radius: 24px;
+  margin: 12px 0;
   word-wrap: break-word;
-  line-height: 1.4;
+  line-height: 1.5;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.message-bubble::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: inherit;
+  z-index: -1;
+  transition: all 0.3s ease;
+}
+
+.message-bubble:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
 }
 
 .message-bubble.user {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%, #9c88ff 200%);
   color: white;
   margin-left: auto;
-  border-bottom-right-radius: 4px;
+  border-bottom-right-radius: 8px;
+  box-shadow: 0 4px 15px rgba(103, 126, 234, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.message-bubble.user::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.message-bubble.user:hover::after {
+  left: 100%;
 }
 
 .message-bubble.assistant {
-  background: #f5f5f5;
-  color: #333;
-  border-bottom-left-radius: 4px;
-  border: 1px solid #e0e0e0;
+  background: rgba(255, 255, 255, 0.95);
+  color: #2d3748;
+  border-bottom-left-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+.message-bubble.assistant:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(103, 126, 234, 0.2);
 }
 
 .message-bubble.system {
-  background: #fff3cd;
-  color: #856404;
-  border: 1px solid #ffeaa7;
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 235, 59, 0.1) 100%);
+  color: #f57c00;
+  border: 1px solid rgba(255, 193, 7, 0.3);
   text-align: center;
   font-size: 0.9em;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
 }
 
-/* 代码块样式 */
+.message-bubble.system::before {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, rgba(255, 235, 59, 0.05) 100%);
+}
+
+/* 现代化代码块样式 */
 .message-bubble pre {
-  background: #2d3748;
+  background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
   color: #e2e8f0;
-  padding: 12px;
-  border-radius: 8px;
+  padding: 16px;
+  border-radius: 12px;
   overflow-x: auto;
-  margin: 8px 0;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  margin: 12px 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
   font-size: 0.9em;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.message-bubble pre::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #9c88ff);
+  border-radius: 12px 12px 0 0;
 }
 
 .message-bubble code {
-  background: rgba(0, 0, 0, 0.1);
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  background: rgba(103, 126, 234, 0.1);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
   font-size: 0.9em;
+  border: 1px solid rgba(103, 126, 234, 0.2);
+  color: #667eea;
+  font-weight: 500;
 }
 
-/* 链接样式 */
+.message-bubble.user code {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 现代化链接样式 */
 .message-bubble a {
-  color: inherit;
-  text-decoration: underline;
-  opacity: 0.8;
+  color: #667eea;
+  text-decoration: none;
+  position: relative;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border-bottom: 1px solid transparent;
+}
+
+.message-bubble a::before {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  transition: width 0.3s ease;
 }
 
 .message-bubble a:hover {
-  opacity: 1;
+  color: #764ba2;
+  transform: translateY(-1px);
 }
 
-/* 表格样式 */
+.message-bubble a:hover::before {
+  width: 100%;
+}
+
+.message-bubble.user a {
+  color: rgba(255, 255, 255, 0.9);
+  border-bottom-color: rgba(255, 255, 255, 0.5);
+}
+
+.message-bubble.user a:hover {
+  color: white;
+}
+
+.message-bubble.user a::before {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.6));
+}
+
+/* 现代化表格样式 */
 .message-bubble table {
   border-collapse: collapse;
   width: 100%;
-  margin: 8px 0;
+  margin: 12px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
 }
 
 .message-bubble th,
 .message-bubble td {
-  border: 1px solid #ddd;
-  padding: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 12px 16px;
   text-align: left;
+  transition: background-color 0.3s ease;
 }
 
 .message-bubble th {
-  background-color: rgba(0, 0, 0, 0.1);
-  font-weight: bold;
+  background: linear-gradient(135deg, rgba(103, 126, 234, 0.1) 0%, rgba(217, 70, 239, 0.1) 100%);
+  font-weight: 600;
+  color: #4a5568;
+  border-bottom: 2px solid rgba(103, 126, 234, 0.2);
 }
 
-/* 列表样式 */
+.message-bubble tr:hover td {
+  background-color: rgba(103, 126, 234, 0.05);
+}
+
+.message-bubble.user table {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.message-bubble.user th {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+}
+
+.message-bubble.user td {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.message-bubble.user tr:hover td {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 现代化列表样式 */
 .message-bubble ul,
 .message-bubble ol {
-  padding-left: 20px;
-  margin: 8px 0;
+  padding-left: 24px;
+  margin: 12px 0;
 }
 
 .message-bubble li {
-  margin: 4px 0;
-}
-
-/* 引用样式 */
-.message-bubble blockquote {
-  border-left: 4px solid #ccc;
   margin: 8px 0;
-  padding-left: 16px;
-  font-style: italic;
-  opacity: 0.8;
+  position: relative;
+  transition: all 0.3s ease;
 }
 
-/* 工具提示 */
+.message-bubble ul li::before {
+  content: '\2022';
+  color: #667eea;
+  font-weight: bold;
+  position: absolute;
+  left: -20px;
+  font-size: 1.2em;
+  line-height: 1;
+  transition: all 0.3s ease;
+}
+
+.message-bubble.user ul li::before {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.message-bubble ol li {
+  counter-increment: item;
+}
+
+.message-bubble ol li::before {
+  content: counter(item) '.';
+  color: #667eea;
+  font-weight: 600;
+  position: absolute;
+  left: -24px;
+  transition: all 0.3s ease;
+}
+
+.message-bubble.user ol li::before {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.message-bubble ol {
+  counter-reset: item;
+}
+
+.message-bubble li:hover {
+  transform: translateX(4px);
+}
+
+/* 现代化引用样式 */
+.message-bubble blockquote {
+  border-left: 4px solid #667eea;
+  margin: 16px 0;
+  padding: 16px 20px;
+  background: rgba(103, 126, 234, 0.05);
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  position: relative;
+  backdrop-filter: blur(5px);
+  transition: all 0.3s ease;
+}
+
+.message-bubble blockquote::before {
+  content: '\201C';
+  font-size: 3em;
+  color: rgba(103, 126, 234, 0.3);
+  position: absolute;
+  top: -10px;
+  left: 10px;
+  line-height: 1;
+  font-family: serif;
+}
+
+.message-bubble blockquote:hover {
+  background: rgba(103, 126, 234, 0.1);
+  transform: translateX(4px);
+  box-shadow: -4px 0 12px rgba(103, 126, 234, 0.2);
+}
+
+.message-bubble.user blockquote {
+  border-left-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.message-bubble.user blockquote::before {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.message-bubble.user blockquote:hover {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: -4px 0 12px rgba(255, 255, 255, 0.2);
+}
+
+/* 现代化工具提示 */
 .tooltip {
   position: relative;
   cursor: help;
+  display: inline-block;
 }
 
 .tooltip::after {
   content: attr(data-tooltip);
   position: absolute;
-  bottom: 100%;
+  bottom: 120%;
   left: 50%;
-  transform: translateX(-50%);
-  background: #333;
+  transform: translateX(-50%) scale(0);
+  background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
   color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 8px 12px;
+  border-radius: 8px;
   font-size: 0.8em;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
 }
 
-.tooltip:hover::after {
+.tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  border: 6px solid transparent;
+  border-top-color: #2d3748;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tooltip:hover::after,
+.tooltip:hover::before {
   opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
-/* 错误状态 */
+/* 现代化状态样式 */
 .error-state {
-  color: #d32f2f;
-  background: #ffebee;
-  border: 1px solid #ffcdd2;
-  padding: 12px;
-  border-radius: 8px;
-  margin: 8px 0;
+  color: #e53e3e;
+  background: linear-gradient(135deg, rgba(229, 62, 62, 0.1) 0%, rgba(245, 101, 101, 0.1) 100%);
+  border: 1px solid rgba(229, 62, 62, 0.3);
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin: 12px 0;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 成功状态 */
+.error-state::before {
+  content: '\26A0';
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  font-size: 1.2em;
+  animation: pulse 2s infinite;
+}
+
+.error-state {
+  padding-left: 50px;
+}
+
 .success-state {
-  color: #2e7d32;
-  background: #e8f5e8;
-  border: 1px solid #c8e6c9;
-  padding: 12px;
-  border-radius: 8px;
-  margin: 8px 0;
+  color: #38a169;
+  background: linear-gradient(135deg, rgba(56, 161, 105, 0.1) 0%, rgba(72, 187, 120, 0.1) 100%);
+  border: 1px solid rgba(56, 161, 105, 0.3);
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin: 12px 0;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 警告状态 */
+.success-state::before {
+  content: '\2713';
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  font-size: 1.2em;
+  animation: bounce 1s ease-in-out;
+}
+
+.success-state {
+  padding-left: 50px;
+}
+
 .warning-state {
-  color: #f57c00;
-  background: #fff8e1;
-  border: 1px solid #ffecb3;
-  padding: 12px;
-  border-radius: 8px;
-  margin: 8px 0;
+  color: #d69e2e;
+  background: linear-gradient(135deg, rgba(214, 158, 46, 0.1) 0%, rgba(236, 201, 75, 0.1) 100%);
+  border: 1px solid rgba(214, 158, 46, 0.3);
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin: 12px 0;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 信息状态 */
+.warning-state::before {
+  content: '\26A0';
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  font-size: 1.2em;
+  color: #d69e2e;
+}
+
+.warning-state {
+  padding-left: 50px;
+}
+
 .info-state {
-  color: #1976d2;
-  background: #e3f2fd;
-  border: 1px solid #bbdefb;
-  padding: 12px;
-  border-radius: 8px;
-  margin: 8px 0;
+  color: #3182ce;
+  background: linear-gradient(135deg, rgba(49, 130, 206, 0.1) 0%, rgba(66, 153, 225, 0.1) 100%);
+  border: 1px solid rgba(49, 130, 206, 0.3);
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin: 12px 0;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.info-state::before {
+  content: '\2139';
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  font-size: 1.2em;
+  color: #3182ce;
+}
+
+.info-state {
+  padding-left: 50px;
+}
+
+/* 状态悬浮效果 */
+.error-state:hover,
+.success-state:hover,
+.warning-state:hover,
+.info-state:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* 现代化卡片样式 */
+.modern-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  position: relative;
+}
+
+.modern-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #9c88ff);
+}
+
+.modern-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  border-color: rgba(103, 126, 234, 0.3);
+}
+
+/* 现代化按钮样式 */
+.modern-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(103, 126, 234, 0.3);
+}
+
+.modern-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.modern-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(103, 126, 234, 0.4);
+}
+
+.modern-button:hover::before {
+  left: 100%;
+}
+
+.modern-button:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 15px rgba(103, 126, 234, 0.3);
 }

@@ -217,22 +217,125 @@ const FileManagementPage: React.FC = () => {
   }, []);
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container 
+      maxWidth="lg" 
+      sx={{ 
+        py: 4,
+        background: 'linear-gradient(135deg, rgba(246, 249, 252, 0.8) 0%, rgba(238, 243, 248, 0.8) 100%)',
+        minHeight: 'calc(100vh - 64px)',
+        position: 'relative',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: `
+            radial-gradient(circle at 20% 30%, rgba(103, 126, 234, 0.03) 0%, transparent 50%),
+            radial-gradient(circle at 80% 70%, rgba(217, 70, 239, 0.03) 0%, transparent 50%)
+          `,
+          pointerEvents: 'none',
+          zIndex: 0,
+        },
+      }}>
       <AnimatedBox animation="fadeInUp" duration="0.6s">
-        <Typography variant="h4" component="h1" gutterBottom>
+        <Box sx={{ position: 'relative', zIndex: 1 }}>
+          <Typography variant="h4" component="h1" gutterBottom sx={{
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textShadow: 'none',
+            mb: 2,
+          }}>
           文件管理
         </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+        <Typography variant="body1" color="text.secondary" sx={{ 
+          mb: 4,
+          fontSize: '1.1rem',
+          lineHeight: 1.6,
+          opacity: 0.8,
+        }}>
           管理您的医疗文档，支持上传、查看和删除操作
         </Typography>
+        </Box>
       </AnimatedBox>
 
       <AnimatedBox animation="fadeInUp" delay="0.2s" duration="0.6s">
-        <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs value={currentTab} onChange={handleTabChange} aria-label="文件管理标签页">
-              <Tab label="文档管理" />
-              <Tab label="智能分块配置" />
+        <Paper 
+          elevation={3} 
+          sx={{ 
+            p: 4, 
+            mb: 3,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(20px)',
+            borderRadius: 4,
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            position: 'relative',
+            overflow: 'hidden',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 3,
+              background: 'linear-gradient(90deg, #667eea, #764ba2, #9c88ff)',
+            },
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)',
+            },
+          }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'rgba(0, 0, 0, 0.08)', mb: 3, pb: 2 }}>
+            <Tabs 
+              value={currentTab} 
+              onChange={handleTabChange} 
+              aria-label="文件管理标签页"
+              sx={{
+                '& .MuiTab-root': {
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  minWidth: 120,
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    color: 'primary.main',
+                    transform: 'translateY(-2px)',
+                  },
+                  '&.Mui-selected': {
+                    color: 'primary.main',
+                    fontWeight: 700,
+                  },
+                },
+                '& .MuiTabs-indicator': {
+                  height: 3,
+                  borderRadius: '3px 3px 0 0',
+                  background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                },
+              }}>
+              <Tab 
+                label="文档管理" 
+                sx={{
+                  '&:hover': {
+                    background: 'rgba(103, 126, 234, 0.05)',
+                    borderRadius: 2,
+                  },
+                }} 
+              />
+              <Tab 
+                label="智能分块配置" 
+                sx={{
+                  '&:hover': {
+                    background: 'rgba(103, 126, 234, 0.05)',
+                    borderRadius: 2,
+                  },
+                }} 
+              />
             </Tabs>
           </Box>
           
@@ -264,6 +367,22 @@ const FileManagementPage: React.FC = () => {
                       onClick={() => loadDocuments()}
                       disabled={isLoading}
                       size="small"
+                      sx={{
+                        borderRadius: 3,
+                        borderWidth: 2,
+                        borderColor: 'rgba(103, 126, 234, 0.3)',
+                        color: 'primary.main',
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(10px)',
+                        fontWeight: 600,
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          background: 'rgba(103, 126, 234, 0.1)',
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 4px 15px rgba(103, 126, 234, 0.2)',
+                        },
+                      }}
                     >
                       刷新
                     </AccessibleButton>
@@ -274,6 +393,19 @@ const FileManagementPage: React.FC = () => {
                       startIcon={<AddIcon />}
                       onClick={() => setUploadDialogOpen(true)}
                       size="small"
+                      sx={{
+                        borderRadius: 3,
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        boxShadow: '0 4px 15px rgba(103, 126, 234, 0.3)',
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 6px 20px rgba(103, 126, 234, 0.4)',
+                        },
+                      }}
                     >
                       上传文档
                     </AccessibleButton>
@@ -380,20 +512,36 @@ const FileManagementPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* 浮动操作按钮 */}
+      {/* 现代化浮动操作按钮 */}
       <HoverAnimatedBox hoverAnimation="scale">
         <Fab
           color="primary"
           aria-label="上传文档"
           sx={{
             position: 'fixed',
-            bottom: 24,
-            right: 24,
+            bottom: 32,
+            right: 32,
             zIndex: 1000,
+            width: 64,
+            height: 64,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            boxShadow: '0 8px 25px rgba(103, 126, 234, 0.4)',
+            border: '2px solid rgba(255, 255, 255, 0.2)',
+            backdropFilter: 'blur(10px)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+              transform: 'scale(1.15)',
+              boxShadow: '0 12px 35px rgba(103, 126, 234, 0.5)',
+              borderColor: 'rgba(255, 255, 255, 0.4)',
+            },
+            '&:active': {
+              transform: 'scale(1.1)',
+            },
           }}
           onClick={() => setUploadDialogOpen(true)}
         >
-          <AddIcon />
+          <AddIcon sx={{ fontSize: 28 }} />
         </Fab>
       </HoverAnimatedBox>
 

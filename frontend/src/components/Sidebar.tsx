@@ -286,7 +286,19 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >
-            <IconButton onClick={toggleCollapse} size="small">
+            <IconButton onClick={toggleCollapse} size="small" sx={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: 'text.primary',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              '&:hover': {
+                background: 'rgba(103, 126, 234, 0.1)',
+                borderColor: 'rgba(103, 126, 234, 0.3)',
+                transform: 'scale(1.1)',
+                color: 'primary.main',
+              },
+            }}>
               {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
             </IconButton>
           </Box>
@@ -308,14 +320,20 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
               onClick={toggleCollapse} 
               size="large"
               sx={{
-                width: 44,
-                height: 44,
-                bgcolor: 'action.hover',
-                border: '1px solid',
-                borderColor: 'divider',
+                width: 48,
+                height: 48,
+                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)',
+                border: '2px solid',
+                borderColor: 'rgba(255, 255, 255, 0.2)',
+                color: 'text.primary',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 '&:hover': {
-                  bgcolor: 'primary.light',
-                  borderColor: 'primary.main',
+                  bgcolor: 'rgba(103, 126, 234, 0.1)',
+                  borderColor: 'rgba(103, 126, 234, 0.4)',
+                  color: 'primary.main',
+                  transform: 'scale(1.1)',
+                  boxShadow: '0 4px 15px rgba(103, 126, 234, 0.2)',
                 },
               }}
             >
@@ -331,14 +349,20 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                 edge="end"
                 size="large"
                 sx={{
-                  width: 44,
-                  height: 44,
-                  bgcolor: 'action.hover',
-                  border: '1px solid',
-                  borderColor: 'divider',
+                  width: 48,
+                  height: 48,
+                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                  backdropFilter: 'blur(10px)',
+                  border: '2px solid',
+                  borderColor: 'rgba(255, 255, 255, 0.2)',
+                  color: 'text.primary',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
-                    bgcolor: 'error.light',
-                    borderColor: 'error.main',
+                    bgcolor: 'rgba(244, 67, 54, 0.1)',
+                    borderColor: 'rgba(244, 67, 54, 0.4)',
+                    color: 'error.main',
+                    transform: 'scale(1.1)',
+                    boxShadow: '0 4px 15px rgba(244, 67, 54, 0.2)',
                   },
                 }}
               >
@@ -360,16 +384,39 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                   onClick={onCreateSession}
                   sx={{ 
                     mb: 1.5,
-                    py: 1.2,
-                    borderRadius: 2,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    boxShadow: '0 4px 12px rgba(103, 126, 234, 0.3)',
+                    py: 1.5,
+                    borderRadius: 3,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #9c88ff 100%)',
+                    boxShadow: '0 6px 20px rgba(103, 126, 234, 0.4)',
                     fontSize: isMobile ? '0.9rem' : '1rem',
                     fontWeight: 600,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    backdropFilter: 'blur(10px)',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: '-100%',
+                      width: '100%',
+                      height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
+                      transition: 'left 0.6s ease',
+                    },
                     '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: '0 6px 16px rgba(103, 126, 234, 0.4)',
+                      transform: 'translateY(-3px) scale(1.02)',
+                      background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 50%, #8b7fff 100%)',
+                      boxShadow: '0 8px 25px rgba(103, 126, 234, 0.5)',
+                      borderColor: 'rgba(255, 255, 255, 0.4)',
+                    },
+                    '&:hover::before': {
+                      left: '100%',
+                    },
+                    '&:active': {
+                      transform: 'translateY(-1px) scale(1.01)',
+                      boxShadow: '0 4px 15px rgba(103, 126, 234, 0.4)',
                     },
                   }}
                 >
@@ -387,9 +434,17 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
               sx={{
                 bgcolor: 'primary.main',
                 color: 'white',
+                width: 48,
+                height: 48,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                boxShadow: '0 4px 15px rgba(103, 126, 234, 0.4)',
+                border: '2px solid rgba(255, 255, 255, 0.2)',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 '&:hover': {
-                  bgcolor: 'primary.dark',
+                  background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                  transform: 'scale(1.1)',
+                  boxShadow: '0 6px 20px rgba(103, 126, 234, 0.5)',
+                  borderColor: 'rgba(255, 255, 255, 0.4)',
                 },
               }}
             >
@@ -515,37 +570,92 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                               selected={session.id === currentSession}
                               onClick={() => handleSessionClick(session.id)}
                               sx={{
-                                borderRadius: 2,
+                                borderRadius: 3,
                                 py: 1.5,
                                 pr: collapsed ? 0.5 : 1,
                                 pl: collapsed ? 0.5 : 2,
                                 justifyContent: collapsed ? 'center' : 'flex-start',
-                                transition: 'all 0.2s ease-in-out',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                background: session.id === currentSession 
+                                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #9c88ff 100%)' 
+                                  : 'rgba(255, 255, 255, 0.5)',
+                                backdropFilter: 'blur(10px)',
+                                border: session.id === currentSession 
+                                  ? '1px solid rgba(255, 255, 255, 0.3)' 
+                                  : '1px solid rgba(0, 0, 0, 0.08)',
+                                color: session.id === currentSession ? 'white' : 'inherit',
+                                boxShadow: session.id === currentSession 
+                                  ? '0 4px 15px rgba(103, 126, 234, 0.3)' 
+                                  : '0 2px 8px rgba(0, 0, 0, 0.05)',
+                                '&::before': {
+                                  content: '""',
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: '-100%',
+                                  width: '100%',
+                                  height: '100%',
+                                  background: session.id === currentSession 
+                                    ? 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent)'
+                                    : 'linear-gradient(90deg, transparent, rgba(103, 126, 234, 0.1), transparent)',
+                                  transition: 'left 0.5s ease',
+                                },
                                 '&.Mui-selected': {
-                                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #9c88ff 100%)',
                                   color: 'white',
-                                  boxShadow: '0 4px 12px rgba(103, 126, 234, 0.3)',
+                                  boxShadow: '0 4px 15px rgba(103, 126, 234, 0.3)',
                                   '&:hover': {
-                                    background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
-                                    transform: 'translateX(4px)',
+                                    background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 50%, #8b7fff 100%)',
+                                    transform: 'translateX(6px) scale(1.02)',
+                                    boxShadow: '0 6px 20px rgba(103, 126, 234, 0.4)',
                                   },
                                 },
                                 '&:hover': {
-                                  bgcolor: 'action.hover',
-                                  transform: 'translateX(2px)',
+                                  background: session.id === currentSession 
+                                    ? 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 50%, #8b7fff 100%)'
+                                    : 'rgba(103, 126, 234, 0.08)',
+                                  transform: 'translateX(4px) scale(1.01)',
+                                  boxShadow: session.id === currentSession 
+                                    ? '0 6px 20px rgba(103, 126, 234, 0.4)'
+                                    : '0 4px 12px rgba(103, 126, 234, 0.15)',
+                                  borderColor: 'rgba(103, 126, 234, 0.3)',
+                                },
+                                '&:hover::before': {
+                                  left: '100%',
+                                },
+                                '&:active': {
+                                  transform: 'translateX(2px) scale(1)',
                                 },
                               }}
                             >
                               <ListItemIcon sx={{ minWidth: collapsed ? 'auto' : 40, justifyContent: 'center' }}>
-                                <HoverAnimatedBox hoverAnimation="scale">
+                                <HoverAnimatedBox hoverAnimation="scale" sx={{ minWidth: collapsed ? 'auto' : 40, justifyContent: 'center' }}>
                                   <Avatar
                                     sx={{
-                                      width: 32,
-                                      height: 32,
+                                      width: 36,
+                                      height: 36,
                                       bgcolor: session.id === currentSession 
                                         ? 'rgba(255,255,255,0.2)' 
                                         : 'primary.main',
+                                      background: session.id === currentSession 
+                                        ? 'rgba(255,255,255,0.2)' 
+                                        : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                                       fontSize: '0.875rem',
+                                      border: '2px solid',
+                                      borderColor: session.id === currentSession 
+                                        ? 'rgba(255,255,255,0.3)' 
+                                        : 'rgba(103, 126, 234, 0.2)',
+                                      boxShadow: session.id === currentSession 
+                                        ? '0 2px 8px rgba(0,0,0,0.2)' 
+                                        : '0 2px 8px rgba(103, 126, 234, 0.3)',
+                                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                      '&:hover': {
+                                        transform: 'scale(1.1)',
+                                        boxShadow: session.id === currentSession 
+                                          ? '0 4px 12px rgba(0,0,0,0.3)' 
+                                          : '0 4px 12px rgba(103, 126, 234, 0.4)',
+                                      },
                                     }}
                                   >
                                     <ChatIcon fontSize="small" />
@@ -637,21 +747,26 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
             top: 16,
             left: 16,
             zIndex: 1300,
-            width: 56,
-            height: 56,
-            bgcolor: 'primary.main',
+            width: 64,
+            height: 64,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: 'white',
-            boxShadow: '0 4px 12px rgba(103, 126, 234, 0.3)',
-            border: '2px solid white',
-            transition: 'all 0.2s ease-in-out',
+            boxShadow: '0 6px 20px rgba(103, 126, 234, 0.4)',
+            border: '2px solid rgba(255, 255, 255, 0.3)',
+            backdropFilter: 'blur(10px)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
-              bgcolor: 'primary.dark',
+              background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+              transform: 'scale(1.1)',
+              boxShadow: '0 8px 25px rgba(103, 126, 234, 0.5)',
+              borderColor: 'rgba(255, 255, 255, 0.5)',
+            },
+            '&:active': {
               transform: 'scale(1.05)',
-              boxShadow: '0 6px 16px rgba(103, 126, 234, 0.4)',
             },
           }}
         >
-          <ChevronRightIcon sx={{ fontSize: 28, fontWeight: 'bold' }} />
+          <ChevronRightIcon sx={{ fontSize: 32, fontWeight: 'bold', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }} />
         </AccessibleIconButton>
       )}
 
@@ -665,22 +780,28 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
             top: 16,
             left: 16,
             zIndex: 1300,
-            width: 56,
-            height: 56,
+            width: 60,
+            height: 60,
             bgcolor: 'background.paper',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            border: '1px solid',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.15)',
+            border: '2px solid',
             borderColor: 'divider',
-            transition: 'all 0.2s ease-in-out',
+            backdropFilter: 'blur(10px)',
+            background: 'rgba(255, 255, 255, 0.95)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             '&:hover': {
-              bgcolor: 'primary.main',
-              color: 'primary.contrastText',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              transform: 'scale(1.1)',
+              boxShadow: '0 8px 25px rgba(103, 126, 234, 0.4)',
+              borderColor: 'rgba(103, 126, 234, 0.3)',
+            },
+            '&:active': {
               transform: 'scale(1.05)',
-              boxShadow: '0 6px 16px rgba(103, 126, 234, 0.3)',
             },
           }}
         >
-          <MenuIcon fontSize="large" />
+          <MenuIcon sx={{ fontSize: 28, transition: 'all 0.3s ease' }} />
         </AccessibleIconButton>
       )}
 
