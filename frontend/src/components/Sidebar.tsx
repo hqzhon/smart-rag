@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Drawer,
@@ -152,56 +152,85 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
 
   const handleMenuClose = () => {
     setMenuAnchorEl(null);
-    setSelectedSessionId(null);
+    // 注意：不要在这里清除selectedSessionId，因为菜单项的onClick需要使用它
+    // setSelectedSessionId(null);
   };
 
   
 
   const handleRenameConfirm = async () => {
-    if (selectedSessionId && newSessionTitle.trim()) {
-      try {
-        const response = await fetch(`/api/chat/sessions/${selectedSessionId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ title: newSessionTitle.trim() }),
-        });
-        
-        if (response.ok) {
-          // 重新加载会话列表以反映更改
-          loadSessions();
-        } else {
-          // 重命名失败处理
-        }
-      } catch (error) {
-        // 重命名操作失败
-      }
+    if (!selectedSessionId) {
+      alert('未选择会话');
+      return;
     }
-    setRenameDialogOpen(false);
-    setNewSessionTitle('');
-    setSelectedSessionId(null);
+    
+    // 更严格的输入验证
+    if (!newSessionTitle) {
+      alert('请输入会话名称');
+      return;
+    }
+    
+    const trimmedTitle = newSessionTitle.trim();
+    if (!trimmedTitle) {
+      alert('请输入有效的会话名称');
+      return;
+    }
+    
+    if (trimmedTitle.length > 100) {
+      alert('会话名称不能超过100个字符');
+      return;
+    }
+    
+    try {
+      const result = await chatApi.renameSession(selectedSessionId, trimmedTitle);
+      
+      if (result.success) {
+        // 重新加载会话列表以反映更改
+        await loadSessions();
+        setRenameDialogOpen(false);
+        setNewSessionTitle('');
+        setSelectedSessionId(null);
+      } else {
+        // 显示错误信息
+        alert(result.message || '重命名失败');
+      }
+    } catch (error) {
+      alert('重命名会话失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    }
   };
 
   const handleDeleteConfirm = async () => {
-    if (selectedSessionId) {
-      try {
-        const result = await chatApi.deleteSession(selectedSessionId);
-        if (result.success) {
-          // 重新加载会话列表
-          loadSessions();
-          setDeleteDialogOpen(false);
-          if (currentSession === selectedSessionId) {
-            setCurrentSession(null);
-          }
-        } else {
-          // 删除会话失败处理
-        }
-      } catch (error) {
-        // 删除操作失败
-      }
+    if (!selectedSessionId) {
+      alert('未选择会话');
+      setSelectedSessionId(null);
+      setDeleteDialogOpen(false);
+      return;
     }
-    setSelectedSessionId(null);
+    
+    try {
+      const result = await chatApi.deleteSession(selectedSessionId);
+      
+      if (result.success) {
+        // 如果删除的是当前会话，先清除当前会话状态
+        if (currentSession === selectedSessionId) {
+          setCurrentSession(null);
+          // 导航到首页或选择其他会话
+          window.history.pushState(null, '', '/chat');
+        }
+        
+        // 重新加载会话列表
+        await loadSessions();
+        
+      } else {
+        alert(result.message || '删除会话失败');
+      }
+    } catch (error) {
+      alert('删除会话失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      // 确保对话框关闭和状态清理
+      setDeleteDialogOpen(false);
+      setSelectedSessionId(null);
+    }
   };
 
   const toggleGroup = (groupName: string) => {
@@ -849,10 +878,15 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
         <MenuItem onClick={() => {
            const session = sessions.find(s => s.id === selectedSessionId);
            if (session) {
-             setNewSessionTitle(session.title || '');
+             const initialTitle = session.title || '新对话';
+             setNewSessionTitle(initialTitle);
              setRenameDialogOpen(true);
+             handleMenuClose(); // 关闭菜单但保留selectedSessionId
+           } else {
+             alert('找不到对应的会话');
+             setSelectedSessionId(null); // 只有在错误情况下才清除
+             handleMenuClose();
            }
-           handleMenuClose();
          }}>
            <EditIcon sx={{ mr: 1, fontSize: 18 }} />
            重命名
@@ -860,7 +894,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
          <MenuItem 
            onClick={() => {
              setDeleteDialogOpen(true);
-             handleMenuClose();
+             handleMenuClose(); // 关闭菜单但保留selectedSessionId
            }}
            sx={{ color: 'error.main' }}
          >
@@ -872,7 +906,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
       {/* 重命名对话框 */}
       <Dialog 
         open={renameDialogOpen} 
-        onClose={() => setRenameDialogOpen(false)}
+        onClose={() => {
+          setRenameDialogOpen(false);
+          setSelectedSessionId(null); // 关闭对话框时清除选中的会话ID
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -894,7 +931,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRenameDialogOpen(false)}>取消</Button>
+          <Button onClick={() => {
+            setRenameDialogOpen(false);
+            setSelectedSessionId(null); // 取消时清除选中的会话ID
+          }}>取消</Button>
           <Button onClick={handleRenameConfirm} variant="contained">确认</Button>
         </DialogActions>
       </Dialog>
@@ -902,7 +942,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
       {/* 删除确认对话框 */}
       <Dialog 
         open={deleteDialogOpen} 
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={() => {
+          setDeleteDialogOpen(false);
+          setSelectedSessionId(null); // 关闭对话框时清除选中的会话ID
+        }}
       >
         <DialogTitle>删除会话</DialogTitle>
         <DialogContent>
@@ -911,7 +954,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>取消</Button>
+          <Button onClick={() => {
+            setDeleteDialogOpen(false);
+            setSelectedSessionId(null); // 取消时清除选中的会话ID
+          }}>取消</Button>
           <Button 
             onClick={handleDeleteConfirm} 
             color="error" 

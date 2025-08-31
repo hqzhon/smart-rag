@@ -129,6 +129,27 @@ class SessionManager(metaclass=SingletonMeta):
         session = self.sessions.get(session_id)
         return session["workflow"] if session else None
     
+    def remove_session(self, session_id: str) -> bool:
+        """从内存中移除会话
+        
+        Args:
+            session_id: 会话ID
+            
+        Returns:
+            是否成功移除
+        """
+        try:
+            if session_id in self.sessions:
+                del self.sessions[session_id]
+                logger.info(f"从内存中移除会话: {session_id}")
+                return True
+            else:
+                logger.warning(f"尝试移除不存在的会话: {session_id}")
+                return False
+        except Exception as e:
+            logger.error(f"移除会话失败: {str(e)}")
+            return False
+    
 
     
     def cleanup_expired_sessions(self, max_age: int = 3600):

@@ -18,6 +18,14 @@ import {
   Grid,
   Skeleton,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Checkbox,
+  Tooltip,
+  Fab,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -25,6 +33,8 @@ import {
   AccessTime as TimeIcon,
   Chat as ChatIcon,
   Delete as DeleteIcon,
+  DeleteSweep as DeleteSweepIcon,
+  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -55,6 +65,13 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
+  
+  // 新增状态
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   
   const itemsPerPage = 10;
 
@@ -105,29 +122,100 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
     navigate(`/chat/${sessionId}`);
   };
 
-  const handleDeleteSession = async (sessionId: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    
-    if (!window.confirm('确定要删除这个对话记录吗？')) {
-      return;
+  const handleDeleteSession = async (sessionId: string, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation();
     }
     
+    setSessionToDelete(sessionId);
+    setDeleteDialogOpen(true);
+  };
+  
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
+    
+    setDeleting(true);
     try {
-      const result = await chatApi.deleteSession(sessionId);
+      console.log('开始删除会话:', sessionToDelete);
+      const result = await chatApi.deleteSession(sessionToDelete);
+      console.log('删除结果:', result);
+      
       if (result.success) {
+        console.log('删除成功，开始刷新会话列表');
         // 删除成功，重新加载会话列表
         await loadChatSessions();
+        console.log('会话列表刷新完成');
         
         // 如果当前页没有数据了，回到上一页
         if (sessions.length === 1 && currentPage > 1) {
           setCurrentPage(prev => prev - 1);
         }
       } else {
-        alert(result.message || '删除会话失败');
+        console.error('删除失败:', result.message);
+        setError(result.message || '删除会话失败');
       }
     } catch (error) {
       console.error('删除会话失败:', error);
-      alert('删除会话失败');
+      setError('删除会话失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      setSessionToDelete(null);
+    }
+  };
+  
+  // 批量删除功能
+  const handleSelectSession = (sessionId: string, checked: boolean) => {
+    setSelectedSessions(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(sessionId);
+      } else {
+        newSet.delete(sessionId);
+      }
+      return newSet;
+    });
+  };
+  
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedSessions(new Set(sessions.map(s => s.session_id)));
+    } else {
+      setSelectedSessions(new Set());
+    }
+  };
+  
+  const handleBatchDelete = () => {
+    if (selectedSessions.size > 0) {
+      setBatchDeleteDialogOpen(true);
+    }
+  };
+  
+  const confirmBatchDelete = async () => {
+    setDeleting(true);
+    try {
+      const deletePromises = Array.from(selectedSessions).map(sessionId => 
+        chatApi.deleteSession(sessionId)
+      );
+      
+      const results = await Promise.allSettled(deletePromises);
+      const successCount = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+      const failCount = results.length - successCount;
+      
+      if (failCount > 0) {
+        setError(`批量删除完成，成功 ${successCount} 个，失败 ${failCount} 个`);
+      }
+      
+      // 重新加载数据
+      await loadChatSessions();
+      setSelectedSessions(new Set());
+      
+    } catch (error) {
+      console.error('批量删除失败:', error);
+      setError('批量删除失败');
+    } finally {
+      setDeleting(false);
+      setBatchDeleteDialogOpen(false);
     }
   };
 
@@ -145,62 +233,94 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
     setFilterAnchorEl(null);
   };
 
-  const renderSessionCard = (session: ChatSession) => (
-    <AnimatedBox key={session.id} animation="fadeInUp" duration="0.4s">
-      <Card
-        sx={{
-          mb: 2,
-          cursor: 'pointer',
-          transition: 'all 0.2s ease-in-out',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: 4,
-          },
-        }}
-        onClick={() => handleSessionClick(session.session_id)}
-      >
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-            <Typography variant="h6" component="h3" sx={{ fontWeight: 600, color: 'primary.main' }}>
-              {session.title || `对话 ${session.session_id.slice(-6)}`}
-            </Typography>
-            <IconButton
-              size="small"
-              onClick={(e) => handleDeleteSession(session.session_id, e)}
-              sx={{ color: 'text.secondary' }}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Box>
-          
-
-          
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <TimeIcon fontSize="small" color="action" />
-                <Typography variant="caption" color="text.secondary">
-                  {formatDate(session.updated_at)}
-                </Typography>
+  const renderSessionCard = (session: ChatSession) => {
+    const isSelected = selectedSessions.has(session.session_id);
+    
+    return (
+      <AnimatedBox key={session.id} animation="fadeInUp" duration="0.4s">
+        <Card
+          sx={{
+            mb: 2,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease-in-out',
+            border: isSelected ? '2px solid' : '1px solid',
+            borderColor: isSelected ? 'primary.main' : 'divider',
+            backgroundColor: isSelected ? 'primary.50' : 'background.paper',
+            '&:hover': {
+              transform: 'translateY(-2px)',
+              boxShadow: 4,
+            },
+          }}
+        >
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1 }}>
+              {/* 选择框 */}
+              <Checkbox
+                checked={isSelected}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  handleSelectSession(session.session_id, e.target.checked);
+                }}
+                sx={{ mt: -1, mr: 1 }}
+              />
+              
+              {/* 会话信息 */}
+              <Box 
+                sx={{ flexGrow: 1, cursor: 'pointer' }}
+                onClick={() => handleSessionClick(session.session_id)}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                    {session.title || `对话 ${session.session_id.slice(-6)}`}
+                  </Typography>
+                </Box>
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <TimeIcon fontSize="small" color="action" />
+                      <Typography variant="caption" color="text.secondary">
+                        {formatDate(session.updated_at)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <ChatIcon fontSize="small" color="action" />
+                      <Typography variant="caption" color="text.secondary">
+                        {session.message_count} 条消息
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Chip
+                    label="查看详情"
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                  />
+                </Box>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <ChatIcon fontSize="small" color="action" />
-                <Typography variant="caption" color="text.secondary">
-                  {session.message_count} 条消息
-                </Typography>
-              </Box>
+              
+              {/* 删除按钮 */}
+              <Tooltip title="删除会话">
+                <IconButton
+                  size="small"
+                  onClick={(e) => handleDeleteSession(session.session_id, e)}
+                  sx={{ 
+                    color: 'text.secondary',
+                    '&:hover': {
+                      color: 'error.main',
+                      backgroundColor: 'error.50'
+                    }
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Box>
-            <Chip
-              label="查看详情"
-              size="small"
-              variant="outlined"
-              color="primary"
-            />
-          </Box>
-        </CardContent>
-      </Card>
-    </AnimatedBox>
-  );
+          </CardContent>
+        </Card>
+      </AnimatedBox>
+    );
+  };
 
   const renderSkeletonCard = () => (
     <Card sx={{ mb: 2 }}>
@@ -222,9 +342,31 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <AnimatedBox animation="fadeInDown" duration="0.6s">
-        <Typography variant="h4" component="h1" sx={{ mb: 4, fontWeight: 700, color: 'primary.main' }}>
-          历史记录
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 700, color: 'primary.main' }}>
+            历史记录
+          </Typography>
+          
+          {/* 批量操作按钮 */}
+          {selectedSessions.size > 0 && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Chip 
+                label={`已选择 ${selectedSessions.size} 个会话`}
+                color="primary"
+                variant="outlined"
+              />
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteSweepIcon />}
+                onClick={handleBatchDelete}
+                disabled={deleting}
+              >
+                批量删除
+              </Button>
+            </Box>
+          )}
+        </Box>
       </AnimatedBox>
 
       {/* Search and Filter Bar */}
@@ -327,6 +469,20 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
           </AnimatedBox>
         ) : (
           <>
+            {/* 全选按钮 */}
+            {sessions.length > 0 && (
+              <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Checkbox
+                  checked={selectedSessions.size === sessions.length && sessions.length > 0}
+                  indeterminate={selectedSessions.size > 0 && selectedSessions.size < sessions.length}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  {selectedSessions.size === sessions.length ? '取消全选' : '全选'}
+                </Typography>
+              </Box>
+            )}
+            
             {sessions.map(renderSessionCard)}
             
             {/* Pagination */}
@@ -348,6 +504,62 @@ const HistoryPage: React.FC<HistoryPageProps> = () => {
           </>
         )}
       </Box>
+      
+      {/* 单个删除确认对话框 */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => !deleting && setDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>删除会话</DialogTitle>
+        <DialogContent>
+          <Typography>
+            确定要删除这个会话吗？此操作无法撤销。
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+            取消
+          </Button>
+          <Button 
+            onClick={confirmDeleteSession} 
+            color="error" 
+            variant="contained"
+            disabled={deleting}
+          >
+            {deleting ? '删除中...' : '删除'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* 批量删除确认对话框 */}
+      <Dialog
+        open={batchDeleteDialogOpen}
+        onClose={() => !deleting && setBatchDeleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>批量删除会话</DialogTitle>
+        <DialogContent>
+          <Typography>
+            确定要删除选中的 {selectedSessions.size} 个会话吗？此操作无法撤销。
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBatchDeleteDialogOpen(false)} disabled={deleting}>
+            取消
+          </Button>
+          <Button 
+            onClick={confirmBatchDelete} 
+            color="error" 
+            variant="contained"
+            disabled={deleting}
+          >
+            {deleting ? '删除中...' : `删除 ${selectedSessions.size} 个会话`}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

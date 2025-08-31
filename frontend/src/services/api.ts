@@ -184,6 +184,27 @@ export const chatApi = {
       return { success: false, message: 'Failed to delete session' };
     }
   },
+
+  // 重命名会话
+  renameSession: async (sessionId: string, newTitle: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const response = await apiClient.patch(`/chat/sessions/${sessionId}`, {
+        title: newTitle.trim()
+      });
+      return { 
+        success: true, 
+        message: response.data.message || '重命名成功' 
+      };
+    } catch (error: any) {
+      console.error('Rename session error:', error);
+      if (error.response?.status === 404) {
+        return { success: false, message: '会话不存在' };
+      } else if (error.response?.status === 400) {
+        return { success: false, message: '请提供有效的会话名称' };
+      }
+      return { success: false, message: '重命名失败' };
+    }
+  },
 };
 
 // 文档相关API

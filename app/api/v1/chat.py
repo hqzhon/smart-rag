@@ -2,7 +2,7 @@
 对话API
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 import json
@@ -302,8 +302,8 @@ async def delete_session(session_id: str):
 
 
 @router.put("/chat/sessions/{session_id}")
-async def update_session(session_id: str, update_data: dict):
-    """更新会话信息"""
+async def update_session(session_id: str, update_data: Dict[str, Any]):
+    """更新会话信息（完整更新）"""
     try:
         from app.services.chat_service import ChatService
         
@@ -316,7 +316,11 @@ async def update_session(session_id: str, update_data: dict):
         if not title and not metadata:
             raise HTTPException(status_code=400, detail="请提供要更新的标题或元数据")
         
-        success = await chat_service.update_session(session_id, title=title, metadata=metadata)
+        success = await chat_service.update_session(
+            session_id, 
+            title=title if title is not None else None, 
+            metadata=metadata if metadata is not None else None
+        )
         
         if success:
             return {"message": "会话更新成功"}
@@ -328,3 +332,46 @@ async def update_session(session_id: str, update_data: dict):
     except Exception as e:
         logger.error(f"更新会话失败: {str(e)}")
         raise HTTPException(status_code=500, detail="更新会话失败")
+
+
+@router.patch("/chat/sessions/{session_id}")
+async def patch_session(session_id: str, update_data: Dict[str, Any]):
+    """部分更新会话信息（用于重命名等操作）"""
+    try:
+        from app.services.chat_service import ChatService
+        
+        chat_service = ChatService()
+        
+        # 验证会话是否存在
+        session_info = await chat_service.get_session_info(session_id)
+        if not session_info:
+            raise HTTPException(status_code=404, detail="会话不存在")
+        
+        # 提取要更新的字段
+        title = update_data.get('title')
+        metadata = update_data.get('metadata')
+        
+        if not title and not metadata:
+            raise HTTPException(status_code=400, detail="请提供要更新的字段")
+        
+        # 执行更新
+        success = await chat_service.update_session(
+            session_id, 
+            title=title if title is not None else None, 
+            metadata=metadata if metadata is not None else None
+        )
+        
+        if success:
+            return {
+                "message": "会话更新成功",
+                "session_id": session_id,
+                "updated_fields": list(update_data.keys())
+            }
+        else:
+            raise HTTPException(status_code=500, detail="会话更新失败")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"部分更新会话失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="会话更新失败")
