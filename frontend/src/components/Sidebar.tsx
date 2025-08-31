@@ -55,7 +55,6 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
   const { sessions, currentSession, setCurrentSession, loadSessions, loadChatHistory } = useChatStore();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('lg'));
 
   // 状态管理
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -210,6 +209,13 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
       if (isMobile) {
         onToggle();
       }
+      // 滚动到聊天界面底部 - 增加延迟以等待数据渲染
+      setTimeout(() => {
+        const messagesEnd = document.querySelector('[data-messages-end]');
+        if (messagesEnd) {
+          messagesEnd.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 500);
     }
   };
 

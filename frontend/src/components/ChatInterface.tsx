@@ -2,25 +2,18 @@ import React, { useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
-  Typography,
   LinearProgress,
   Alert,
   Container,
   Fade,
-  Chip,
-  Avatar,
   Slide,
   Grow,
 } from '@mui/material';
-import {
-  Chat as ChatIcon,
-  SmartToy as BotIcon,
-} from '@mui/icons-material';
 
 import MessageList from './MessageList';
 import ChatInput from './ChatInput';
 import { useChatStore } from '@/stores/chatStore';
-import { AnimatedBox, HoverAnimatedBox } from '@/components/animations';
+import { AnimatedBox } from '@/components/animations';
 
 
 
@@ -38,6 +31,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
   } = useChatStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
 
   // 获取当前会话的消息
   const sessionMessages = messages[sessionId] || [];
@@ -46,9 +40,33 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // 检查是否需要自动滚动
+  const shouldAutoScroll = () => {
+    if (!messageContainerRef.current) return true;
+    
+    const container = messageContainerRef.current;
+    const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+    
+    // 如果用户滚动到接近底部（距离底部小于100px），则自动滚动
+    return scrollHeight - scrollTop - clientHeight < 100;
+  };
+
   useEffect(() => {
+    // 新消息时总是滚动到底部
     scrollToBottom();
-  }, [sessionMessages, streamingMessage]);
+  }, [sessionMessages.length]);
+
+  useEffect(() => {
+    // 流式输出时，只有在用户接近底部时才自动滚动
+    if (streamingMessage && shouldAutoScroll()) {
+      // 使用requestAnimationFrame确保DOM更新后再滚动
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
+    }
+  }, [streamingMessage?.content]);
 
   const handleSendMessage = async (content: string) => {
     try {
@@ -110,6 +128,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
         }}
       >
         <Container
+          ref={messageContainerRef}
           maxWidth={false}
           sx={{
             height: '100%',
@@ -118,6 +137,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
             py: 1,
             px: 2,
             maxWidth: '100%',
+            overflow: 'auto',
           }}
         >
           <Fade in timeout={300}>
@@ -134,7 +154,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
                 isStreaming={!!streamingMessage}
                 streamingMessageProp={streamingMessage}
               />
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} data-messages-end />
             </Box>
           </Fade>
         </Container>

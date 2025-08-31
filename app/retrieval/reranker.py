@@ -33,7 +33,22 @@ class QianwenReranker:
             
         try:
             # 兼容不同的文档结构，优先使用page_content，如果没有则使用content
-            doc_texts = [doc.get('page_content') or doc.get('content', '') for doc in documents]
+            # 确保所有文档文本都是有效的非空字符串
+            doc_texts = []
+            valid_doc_indices = []
+            
+            for i, doc in enumerate(documents):
+                text = doc.get('page_content') or doc.get('content', '')
+                # 确保文本是字符串且非空
+                if isinstance(text, str) and text.strip():
+                    doc_texts.append(text.strip())
+                    valid_doc_indices.append(i)
+                else:
+                    logger.warning(f"Document at index {i} has invalid or empty content, skipping")
+            
+            if not doc_texts:
+                logger.warning("No valid documents found for reranking")
+                return documents[:top_k]
             
             client = await get_qianwen_client()
             async with client as c:
@@ -45,8 +60,10 @@ class QianwenReranker:
             
             reranked_docs = []
             for idx, score in rerank_results:
-                if idx < len(documents):
-                    doc = documents[idx].copy()
+                if idx < len(valid_doc_indices):
+                    # 使用valid_doc_indices映射回原始文档索引
+                    original_idx = valid_doc_indices[idx]
+                    doc = documents[original_idx].copy()
                     doc['rerank_score'] = score
                     reranked_docs.append(doc)
             

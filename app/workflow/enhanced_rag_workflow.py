@@ -203,12 +203,19 @@ class EnhancedRAGWorkflow:
     def _build_context(self, documents: List[Dict[str, Any]]) -> str:
         """构建上下文字符串"""
         context_parts = []
-        for i, doc in enumerate(documents, 1):
+        valid_doc_count = 0
+        for doc in documents:
+            # 过滤掉 None 值
+            if doc is None:
+                logger.warning("Skipping None document in _build_context")
+                continue
+            
+            valid_doc_count += 1
             # 兼容不同的文档结构，优先使用page_content，如果没有则使用content
             content = doc.get('page_content') or doc.get('content', '')
             source = doc.get('metadata', {}).get('source', '未知')
             score = doc.get('rerank_score', 0.0)
-            context_parts.append(f"{i} (来源: {source}, 相关度: {score:.3f}):\n{content}\n")
+            context_parts.append(f"{valid_doc_count} (来源: {source}, 相关度: {score:.3f}):\n{content}\n")
         return "\n".join(context_parts)
     
     def _post_process_response(self, response: str) -> str:
@@ -283,7 +290,11 @@ class EnhancedRAGWorkflow:
             reranked_docs = rerank_result.documents
             
             yield {"type": "status", "message": "正在生成专业医疗回答..."}
-            context = self._build_context(reranked_docs)
+            # 过滤掉重排序结果中的None值
+            filtered_docs = [doc for doc in reranked_docs if doc is not None]
+            if len(filtered_docs) != len(reranked_docs):
+                logger.warning(f"Filtered out {len(reranked_docs) - len(filtered_docs)} None documents from reranked results")
+            context = self._build_context(filtered_docs)
             
             # 流式生成回答并收集完整内容
             async for chunk in self._stream_deepseek_response(query, context):
@@ -291,7 +302,12 @@ class EnhancedRAGWorkflow:
                 yield {"type": "chunk", "content": chunk}
             
             # 构建引用文档，使用原始文件名和页码信息
-            for doc in reranked_docs[:3]:
+            for doc in filtered_docs[:3]:
+                # 过滤掉 None 值
+                if doc is None:
+                    logger.warning("Skipping None document in reference docs construction")
+                    continue
+                    
                 metadata = doc.get('metadata', {})
                 # 获取文档名称，优先从向量存储的metadata中获取已有的正确信息
                 doc_name = None
