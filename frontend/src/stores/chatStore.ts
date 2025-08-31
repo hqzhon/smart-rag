@@ -82,18 +82,11 @@ export const useChatStore = create<ChatStore>()(
           const response = await chatApi.createSession();
           const sessionId = response.session_id;
           
-          const newSession: ChatSession = {
-            id: sessionId,
-            title: `会话 ${new Date().toLocaleString()}`,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            messageCount: 0,
-          };
-
+          // 简化逻辑：只设置当前会话状态
           set((state) => ({
-            sessions: [...state.sessions, newSession],
-            messages: { ...state.messages, [sessionId]: [] },
+            ...state,
             currentSession: sessionId,
+            messages: { ...state.messages, [sessionId]: [] },
             isLoading: false,
           }));
 
@@ -112,7 +105,8 @@ export const useChatStore = create<ChatStore>()(
         try {
           set({ isLoading: true, error: null });
           
-          const response = await chatApi.getChatSessions(1, 50); // 获取更多会话
+          const { currentSession: previousCurrentSession } = get();
+          const response = await chatApi.getChatSessions(1, 50, false); 
           
           if (response && response.sessions) {
             const sessions: ChatSession[] = response.sessions
@@ -123,18 +117,28 @@ export const useChatStore = create<ChatStore>()(
                 createdAt: new Date(item.created_at),
                 updatedAt: new Date(item.updated_at),
                 messageCount: item.message_count || 0,
+                status: 'active'
               }));
             
-            set({ sessions, isLoading: false });
+            set((state) => ({
+              ...state,
+              sessions,
+              isLoading: false,
+              currentSession: previousCurrentSession
+            }));
           } else {
-            set({ sessions: [], isLoading: false });
+            set((state) => ({
+              ...state,
+              sessions: [],
+              isLoading: false,
+              currentSession: previousCurrentSession
+            }));
           }
         } catch (error) {
           console.error('加载会话列表失败:', error);
           set({ 
             error: error instanceof Error ? error.message : '加载会话列表失败',
-            isLoading: false,
-            sessions: []
+            isLoading: false
           });
         }
       },
@@ -219,11 +223,9 @@ export const useChatStore = create<ChatStore>()(
                 get().appendDocuments(documents, messageId);
               },
               onStatus: (status: string) => {
-                // Handle status updates if needed
-                console.log('Status:', status);
+                // 处理状态更新
               },
               onError: (error: string) => {
-                console.error('Stream error:', error);
                 set({ error: `发送消息失败: ${error}`, isLoading: false });
                 get().finishStreamingMessage();
               },
@@ -231,24 +233,15 @@ export const useChatStore = create<ChatStore>()(
                 get().finishStreamingMessage();
                 set({ isLoading: false });
                 
-                // 更新会话信息
-                set((state) => ({
-                  sessions: state.sessions.map((session) =>
-                    session.id === sessionId
-                      ? { 
-                          ...session, 
-                          updatedAt: new Date(),
-                          messageCount: (state.messages[sessionId]?.length || 0) + 2
-                        }
-                      : session
-                  ),
-                }));
+                // 发送消息完成后刷新侧边栏，显示新会话
+                setTimeout(() => {
+                  get().loadSessions();
+                }, 300); // 短延迟确保消息已保存到数据库
               },
             }
           );
 
         } catch (error) {
-          console.error('发送流式消息错误:', error);
           let errorMessage = '发送消息失败';
           if (error instanceof Error) {
             errorMessage = `发送消息失败: ${error.message}`;
@@ -376,15 +369,12 @@ export const useChatStore = create<ChatStore>()(
           get().addMessage(sessionId, assistantMessage);
           set({ isLoading: true, error: null });
 
-          // 发送请求 - 修正参数顺序与后端保持一致
-          console.log('发送消息请求:', { query: content, session_id: sessionId });
+          // 发送请求
           
           const response = await chatApi.sendMessage({
             query: content,
             session_id: sessionId,
           });
-          
-          console.log('收到响应:', response);
 
           // 更新助手消息
           get().updateMessage(sessionId, assistantMessage.id, {
@@ -402,30 +392,14 @@ export const useChatStore = create<ChatStore>()(
             metadata: response.metadata,
           });
 
-          // 更新会话信息
-          set((state) => ({
-            sessions: state.sessions.map((session) =>
-              session.id === sessionId
-                ? { 
-                    ...session, 
-                    updatedAt: new Date(),
-                    messageCount: (state.messages[sessionId]?.length || 0) + 2
-                  }
-                : session
-            ),
-            isLoading: false,
-          }));
+          set({ isLoading: false }); // 设置加载状态为 false
+
+          // 发送消息完成后刷新侧边栏，显示新会话
+          setTimeout(() => {
+            get().loadSessions();
+          }, 300); // 短延迟确保消息已保存到数据库
 
         } catch (error) {
-          // 增强错误信息和调试
-          console.error('发送消息详细错误:', {
-            error,
-            sessionId,
-            content,
-            errorMessage: error instanceof Error ? error.message : '未知错误',
-            errorStack: error instanceof Error ? error.stack : undefined
-          });
-          
           let errorMessage = '发送消息失败';
           if (error instanceof Error) {
             errorMessage = `发送消息失败: ${error.message}`;

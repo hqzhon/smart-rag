@@ -62,9 +62,14 @@ const ChatPage: React.FC = () => {
   const handleCreateSession = async () => {
     try {
       const newSessionId = await createSession();
+      // 更新URL反映新会话
       window.history.pushState(null, '', `/chat/${newSessionId}`);
+      // 在移动端创建会话后关闭侧边栏
+      if (isMobile && sidebarOpen) {
+        setSidebarOpen(false);
+      }
     } catch (error) {
-      console.error('创建会话失败:', error);
+      // 创建会话失败处理
     }
   };
 
@@ -73,7 +78,6 @@ const ChatPage: React.FC = () => {
   };
 
   const handleSidebarWidthChange = (width: number) => {
-    console.log('侧边栏宽度变化:', width);
     if (!isMobile) {
       setSidebarWidth(width);
     } else {
@@ -84,22 +88,18 @@ const ChatPage: React.FC = () => {
 
   return (
     <AnimatedBox animation="fadeInUp" duration="0.5s">
-      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', minHeight: 0, position: 'relative' }}>
-        {/* 调试信息 */}
-        {process.env.NODE_ENV === 'development' && (
-          <Box sx={{ 
-            position: 'fixed', 
-            top: 70, 
-            right: 10, 
-            bgcolor: 'black', 
-            color: 'white', 
-            p: 1, 
-            fontSize: 12, 
-            zIndex: 9999 
-          }}>
-            Sidebar: {sidebarOpen ? 'Open' : 'Closed'} | Width: {sidebarWidth}px | Mobile: {isMobile ? 'Yes' : 'No'}
-          </Box>
-        )}
+      <Box sx={{ 
+        height: 'calc(100vh - 64px)', 
+        display: 'grid',
+        gridTemplateColumns: (() => {
+          if (isMobile) return '1fr';
+          if (!sidebarOpen) return '1fr';
+          return `${sidebarWidth}px 1fr`;
+        })(),
+        minHeight: 0, 
+        position: 'relative',
+        transition: 'grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}>
         {/* 侧边栏 */}
         <Sidebar
           open={sidebarOpen}
@@ -111,31 +111,12 @@ const ChatPage: React.FC = () => {
         {/* 主内容区域 */}
         <Box
           sx={{
-            flexGrow: 1,
+            gridColumn: isMobile ? '1' : (sidebarOpen ? '2' : '1'),
             display: 'flex',
             flexDirection: 'column',
-            // 使用transform代替marginLeft，更直接
-            transform: (() => {
-              if (isMobile) return 'translateX(0)';  
-              if (!sidebarOpen) return 'translateX(0)';
-              return `translateX(${sidebarWidth}px)`;
-            })(),
-            // 强制设置位置和尺寸
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: (() => {
-              if (isMobile) return '100%';
-              if (!sidebarOpen) return '100%';
-              return `calc(100% - ${sidebarWidth}px)`;
-            })(),
-            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            padding: 0,
-            margin: 0,
+            minHeight: 0,
             overflow: 'hidden',
-            zIndex: 1,
+            width: '100%',
           }}
         >
           {currentSession ? (

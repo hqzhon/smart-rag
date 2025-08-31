@@ -407,12 +407,13 @@ class ChatService:
             logger.error(f"更新会话失败: {str(e)}")
             return False
     
-    async def get_sessions(self, page: int = 1, page_size: int = 10) -> dict:
+    async def get_sessions(self, page: int = 1, page_size: int = 10, include_empty: bool = False) -> dict:
         """获取会话列表
         
         Args:
             page: 页码
             page_size: 每页数量
+            include_empty: 是否包含空会话（新建但未发送消息的会话）
             
         Returns:
             包含会话列表和分页信息的字典
@@ -422,7 +423,7 @@ class ChatService:
             from app.storage.database import get_db_manager
             db = get_db_manager()
             
-            result = db.get_sessions(page=page, page_size=page_size)
+            result = db.get_sessions(page=page, page_size=page_size, include_empty=include_empty)
             sessions = result.get('sessions', [])
             
             # 转换为前端需要的格式
@@ -433,21 +434,23 @@ class ChatService:
                     'title': session.get('title', '新对话'),
                     'updated_at': session.get('updated_at', ''),
                     'created_at': session.get('created_at', ''),
-                    'message_count': session.get('message_count', 0)
+                    'message_count': session.get('message_count', 0),
+                    'status': session.get('status', 'active')  # 新增状态字段
                 }
                 formatted_sessions.append(formatted_session)
             
-            logger.info(f"获取会话列表成功，共 {len(formatted_sessions)} 个会话，总计 {result.get('total', 0)} 个")
+            logger.info(f"获取会话列表成功，共 {len(formatted_sessions)} 个会话，总计 {result.get('total', 0)} 个，包含空会话: {include_empty}")
             return {
                 'sessions': formatted_sessions,
                 'total': result.get('total', 0),
                 'page': result.get('page', page),
-                'page_size': result.get('page_size', page_size)
+                'page_size': result.get('page_size', page_size),
+                'include_empty': include_empty
             }
             
         except Exception as e:
             logger.error(f"获取会话列表失败: {str(e)}")
-            return {'sessions': [], 'total': 0, 'page': page, 'page_size': page_size}
+            return {'sessions': [], 'total': 0, 'page': page, 'page_size': page_size, 'include_empty': include_empty}
     
     async def cleanup_expired_sessions(self):
         """清理过期会话"""

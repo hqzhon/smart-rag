@@ -516,12 +516,13 @@ class DatabaseManager(metaclass=SingletonMeta):
             logger.error(f"更新会话失败: {e}")
             return False
     
-    def get_sessions(self, page: int = 1, page_size: int = 10) -> Dict[str, Any]:
+    def get_sessions(self, page: int = 1, page_size: int = 10, include_empty: bool = False) -> Dict[str, Any]:
         """获取会话列表
         
         Args:
             page: 页码
             page_size: 每页数量
+            include_empty: 是否包含空会话（新建但未发送消息的会话）
             
         Returns:
             包含会话列表和总数的字典
@@ -531,37 +532,64 @@ class DatabaseManager(metaclass=SingletonMeta):
             
             with self._get_connection() as conn:
                 with conn.cursor(pymysql.cursors.DictCursor) as cursor:
-                    # 首先获取总数
-                    cursor.execute("""
-                        SELECT COUNT(*) as total
-                        FROM (
-                            SELECT s.id
+                    # 根据include_empty参数决定过滤条件
+                    if include_empty:
+                        # 包含所有会话，不过滤空会话
+                        cursor.execute("""
+                            SELECT COUNT(*) as total
+                            FROM sessions s
+                            WHERE s.is_active = 1
+                        """)
+                        total_count = cursor.fetchone()['total']
+                        
+                        cursor.execute("""
+                            SELECT 
+                                s.id as session_id,
+                                s.title,
+                                s.created_at,
+                                s.updated_at,
+                                s.metadata,
+                                COALESCE(COUNT(ch.id), 0) as message_count,
+                                CASE WHEN COUNT(ch.id) > 0 THEN 'active' ELSE 'empty' END as status
                             FROM sessions s
                             LEFT JOIN chat_history ch ON s.id = ch.session_id
                             WHERE s.is_active = 1
-                            GROUP BY s.id
+                            GROUP BY s.id, s.title, s.created_at, s.updated_at, s.metadata
+                            ORDER BY s.updated_at DESC
+                            LIMIT %s OFFSET %s
+                        """, (page_size, offset))
+                    else:
+                        # 只获取有消息的会话（原有逻辑）
+                        cursor.execute("""
+                            SELECT COUNT(*) as total
+                            FROM (
+                                SELECT s.id
+                                FROM sessions s
+                                LEFT JOIN chat_history ch ON s.id = ch.session_id
+                                WHERE s.is_active = 1
+                                GROUP BY s.id
+                                HAVING COUNT(ch.id) > 0
+                            ) as filtered_sessions
+                        """)
+                        total_count = cursor.fetchone()['total']
+                        
+                        cursor.execute("""
+                            SELECT 
+                                s.id as session_id,
+                                s.title,
+                                s.created_at,
+                                s.updated_at,
+                                s.metadata,
+                                COUNT(ch.id) as message_count,
+                                'active' as status
+                            FROM sessions s
+                            LEFT JOIN chat_history ch ON s.id = ch.session_id
+                            WHERE s.is_active = 1
+                            GROUP BY s.id, s.title, s.created_at, s.updated_at, s.metadata
                             HAVING COUNT(ch.id) > 0
-                        ) as filtered_sessions
-                    """)
-                    total_count = cursor.fetchone()['total']
-                    
-                    # 获取会话列表，包含消息数量统计，过滤掉空会话
-                    cursor.execute("""
-                        SELECT 
-                            s.id as session_id,
-                            s.title,
-                            s.created_at,
-                            s.updated_at,
-                            s.metadata,
-                            COUNT(ch.id) as message_count
-                        FROM sessions s
-                        LEFT JOIN chat_history ch ON s.id = ch.session_id
-                        WHERE s.is_active = 1
-                        GROUP BY s.id, s.title, s.created_at, s.updated_at, s.metadata
-                        HAVING COUNT(ch.id) > 0
-                        ORDER BY s.updated_at DESC
-                        LIMIT %s OFFSET %s
-                    """, (page_size, offset))
+                            ORDER BY s.updated_at DESC
+                            LIMIT %s OFFSET %s
+                        """, (page_size, offset))
                     
                     sessions = []
                     for row in cursor.fetchall():

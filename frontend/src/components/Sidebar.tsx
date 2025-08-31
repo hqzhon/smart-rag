@@ -68,6 +68,11 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
   const maxWidth = 500;
   const collapsedWidth = 60;
 
+  // 监听状态变化
+  useEffect(() => {
+    // 组件状态更新时的处理逻辑可以在这里添加
+  }, [currentSession, sessions]);
+
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
@@ -81,6 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
         // 找到包含当前会话的分组
         for (const [groupName, groupSessions] of Object.entries(groups)) {
           if (groupSessions.some(s => s.id === currentSession)) {
+            // 自动展开包含当前会话的分组
             setExpandedGroups(prev => new Set([...prev, groupName]));
             break;
           }
@@ -120,6 +126,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
     sessions.forEach(session => {
       const sessionDate = new Date(session.updatedAt || session.createdAt);
       const sessionDay = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
+
+      // 分组逻辑处理
 
       if (sessionDay.getTime() === today.getTime()) {
         groups['今天'].push(session);
@@ -163,12 +171,11 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
         if (response.ok) {
           // 重新加载会话列表以反映更改
           loadSessions();
-          console.log('会话重命名成功');
         } else {
-          console.error('重命名会话失败');
+          // 重命名失败处理
         }
       } catch (error) {
-        console.error('重命名失败:', error);
+        // 重命名操作失败
       }
     }
     setRenameDialogOpen(false);
@@ -188,10 +195,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
             setCurrentSession(null);
           }
         } else {
-          console.error('删除会话失败:', result.message);
+          // 删除会话失败处理
         }
       } catch (error) {
-        console.error('删除失败:', error);
+        // 删除操作失败
       }
     }
     setSelectedSessionId(null);
@@ -211,15 +218,22 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
     // 找到对应的会话对象
     const session = sessions.find(s => s.id === sessionId);
     if (session) {
-      // 设置当前会话
+      // 立即设置当前会话，确保 UI 即时更新
       setCurrentSession(sessionId);
-      // 加载会话的完整消息历史(已在chatStore中处理滚动)
-      await loadChatHistory(sessionId);
-      // 更新URL
-      window.history.pushState(null, '', `/chat/${sessionId}`);
-      // 移动端选择会话后自动关闭侧边栏
-      if (isMobile) {
-        onToggle();
+      
+      try {
+        // 加载会话的完整消息历史(已在chatStore中处理滚动)
+        await loadChatHistory(sessionId);
+        
+        // 更新URL
+        window.history.pushState(null, '', `/chat/${sessionId}`);
+        
+        // 移动端选择会话后自动关闭侧边栏
+        if (isMobile) {
+          onToggle();
+        }
+      } catch (error) {
+        // 加载会话历史失败处理
       }
     }
   };
@@ -513,6 +527,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
             Object.entries(groupSessionsByDate(sessions)).map(([groupName, groupSessions]) => {
               if (groupSessions.length === 0) return null;
               
+              // 分组信息处理
+              
               return (
                 <Box key={groupName} sx={{ mb: 1 }}>
                   {/* 日期分组标题 */}
@@ -562,99 +578,63 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                   {/* 会话列表 */}
                   <Collapse in={collapsed || expandedGroups.has(groupName)} timeout="auto">
                     <List sx={{ p: 0 }}>
-                      {groupSessions.map((session, index) => (
+                      {groupSessions.map((session, index) => {
+                        const isSelected = session.id === currentSession;
+                        
+                        // 选中状态处理逻辑
+                        return (
                         <ListItem key={session.id} disablePadding sx={{ px: collapsed ? 0.5 : 1.5, mb: 0.5 }}>
                           <HoverAnimatedBox hoverAnimation="scale" sx={{ width: '100%' }}>
                             <ListItemButton
-                              selected={session.id === currentSession}
+                              selected={isSelected}
                               onClick={() => handleSessionClick(session.id)}
-                              sx={{
-                                borderRadius: 3,
-                                py: 1.5,
-                                pr: collapsed ? 0.5 : 1,
-                                pl: collapsed ? 0.5 : 2,
+                              style={{
+                                borderRadius: '12px',
+                                paddingTop: '12px',
+                                paddingBottom: '12px',
+                                paddingRight: collapsed ? '4px' : '8px',
+                                paddingLeft: collapsed ? '4px' : '16px',
                                 justifyContent: collapsed ? 'center' : 'flex-start',
                                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                                 position: 'relative',
                                 overflow: 'hidden',
-                                background: session.id === currentSession 
-                                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #9c88ff 100%)' 
-                                  : 'rgba(255, 255, 255, 0.5)',
                                 backdropFilter: 'blur(10px)',
-                                border: session.id === currentSession 
-                                  ? '1px solid rgba(255, 255, 255, 0.3)' 
-                                  : '1px solid rgba(0, 0, 0, 0.08)',
-                                color: session.id === currentSession ? 'white' : 'inherit',
-                                boxShadow: session.id === currentSession 
-                                  ? '0 4px 15px rgba(103, 126, 234, 0.3)' 
-                                  : '0 2px 8px rgba(0, 0, 0, 0.05)',
-                                '&::before': {
-                                  content: '""',
-                                  position: 'absolute',
-                                  top: 0,
-                                  left: '-100%',
-                                  width: '100%',
-                                  height: '100%',
-                                  background: session.id === currentSession 
-                                    ? 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent)'
-                                    : 'linear-gradient(90deg, transparent, rgba(103, 126, 234, 0.1), transparent)',
-                                  transition: 'left 0.5s ease',
-                                },
-                                '&.Mui-selected': {
+                                ...(isSelected ? {
                                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #9c88ff 100%)',
+                                  backgroundColor: 'transparent',
                                   color: 'white',
+                                  border: '1px solid rgba(255, 255, 255, 0.3)',
                                   boxShadow: '0 4px 15px rgba(103, 126, 234, 0.3)',
-                                  '&:hover': {
-                                    background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 50%, #8b7fff 100%)',
-                                    transform: 'translateX(6px) scale(1.02)',
-                                    boxShadow: '0 6px 20px rgba(103, 126, 234, 0.4)',
-                                  },
-                                },
-                                '&:hover': {
-                                  background: session.id === currentSession 
-                                    ? 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 50%, #8b7fff 100%)'
-                                    : 'rgba(103, 126, 234, 0.08)',
-                                  transform: 'translateX(4px) scale(1.01)',
-                                  boxShadow: session.id === currentSession 
-                                    ? '0 6px 20px rgba(103, 126, 234, 0.4)'
-                                    : '0 4px 12px rgba(103, 126, 234, 0.15)',
-                                  borderColor: 'rgba(103, 126, 234, 0.3)',
-                                },
-                                '&:hover::before': {
-                                  left: '100%',
-                                },
-                                '&:active': {
-                                  transform: 'translateX(2px) scale(1)',
-                                },
+                                } : {
+                                  background: 'rgba(255, 255, 255, 0.5)',
+                                  backgroundColor: 'rgba(255, 255, 255, 0.5)',
+                                  border: '1px solid rgba(0, 0, 0, 0.08)',
+                                  color: 'inherit',
+                                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                                })
                               }}
                             >
                               <ListItemIcon sx={{ minWidth: collapsed ? 'auto' : 40, justifyContent: 'center' }}>
                                 <HoverAnimatedBox hoverAnimation="scale" sx={{ minWidth: collapsed ? 'auto' : 40, justifyContent: 'center' }}>
                                   <Avatar
-                                    sx={{
-                                      width: 36,
-                                      height: 36,
-                                      bgcolor: session.id === currentSession 
-                                        ? 'rgba(255,255,255,0.2)' 
-                                        : 'primary.main',
-                                      background: session.id === currentSession 
-                                        ? 'rgba(255,255,255,0.2)' 
-                                        : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                      fontSize: '0.875rem',
+                                    style={{
+                                      width: '36px',
+                                      height: '36px',
+                                      fontSize: '14px',
                                       border: '2px solid',
-                                      borderColor: session.id === currentSession 
-                                        ? 'rgba(255,255,255,0.3)' 
-                                        : 'rgba(103, 126, 234, 0.2)',
-                                      boxShadow: session.id === currentSession 
-                                        ? '0 2px 8px rgba(0,0,0,0.2)' 
-                                        : '0 2px 8px rgba(103, 126, 234, 0.3)',
                                       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                      '&:hover': {
-                                        transform: 'scale(1.1)',
-                                        boxShadow: session.id === currentSession 
-                                          ? '0 4px 12px rgba(0,0,0,0.3)' 
-                                          : '0 4px 12px rgba(103, 126, 234, 0.4)',
-                                      },
+                                      ...(isSelected ? {
+                                        backgroundColor: 'rgba(255,255,255,0.2)',
+                                        borderColor: 'rgba(255,255,255,0.3)',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                                        color: 'white',
+                                      } : {
+                                        backgroundColor: '#667eea',
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                        borderColor: 'rgba(103, 126, 234, 0.2)',
+                                        boxShadow: '0 2px 8px rgba(103, 126, 234, 0.3)',
+                                        color: 'white',
+                                      })
                                     }}
                                   >
                                     <ChatIcon fontSize="small" />
@@ -669,14 +649,16 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                                     noWrap: true,
                                     fontSize: isMobile ? '0.85rem' : '0.9rem',
                                     fontWeight: 500,
+                                    style: {
+                                      color: isSelected ? 'white' : 'inherit',
+                                      fontWeight: isSelected ? '600' : '500',
+                                    }
                                   }}
                                   secondaryTypographyProps={{
                                     fontSize: isMobile ? '0.7rem' : '0.75rem',
-                                    sx: {
-                                      color: session.id === currentSession 
-                                        ? 'rgba(255,255,255,0.8)' 
-                                        : 'text.secondary',
-                                    },
+                                    style: {
+                                      color: isSelected ? 'rgba(255,255,255,0.8)' : 'inherit',
+                                    }
                                   }}
                                 />
                               )}
@@ -684,16 +666,11 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                                 <IconButton
                                   size="small"
                                   onClick={(e) => handleMenuOpen(e, session.id)}
-                                  sx={{
-                                    ml: 1,
+                                  style={{
+                                    marginLeft: '8px',
                                     opacity: 0.7,
-                                    color: session.id === currentSession ? 'white' : 'text.secondary',
-                                    '&:hover': {
-                                      opacity: 1,
-                                      bgcolor: session.id === currentSession 
-                                        ? 'rgba(255,255,255,0.1)' 
-                                        : 'action.hover',
-                                    },
+                                    color: isSelected ? 'white' : 'inherit',
+                                    transition: 'all 0.2s ease',
                                   }}
                                 >
                                   <MoreVertIcon fontSize="small" />
@@ -702,7 +679,8 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                             </ListItemButton>
                           </HoverAnimatedBox>
                         </ListItem>
-                      ))}
+                        );
+                      })}
                     </List>
                   </Collapse>
                 </Box>

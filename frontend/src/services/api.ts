@@ -158,8 +158,13 @@ export const chatApi = {
   },
 
   // 获取会话列表
-  getChatSessions: async (page: number = 1, pageSize: number = 20): Promise<any> => {
-    const response = await apiClient.get(`/chat/sessions?page=${page}&page_size=${pageSize}`);
+  getChatSessions: async (page: number = 1, pageSize: number = 20, includeEmpty: boolean = false): Promise<any> => {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+      include_empty: includeEmpty.toString()
+    });
+    const response = await apiClient.get(`/chat/sessions?${params.toString()}`);
     return response.data;
   },
 

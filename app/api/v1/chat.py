@@ -135,19 +135,29 @@ async def get_chat_history(session_id: str, limit: int = 50):
 
 
 @router.get("/chat/sessions")
-async def get_sessions(page: int = 1, page_size: int = 10):
-    """获取会话列表"""
+async def get_sessions(page: int = 1, page_size: int = 10, include_empty: bool = False):
+    """获取会话列表
+    
+    Args:
+        page: 页码，默认为1
+        page_size: 每页数量，默认为10
+        include_empty: 是否包含空会话（新建但未发送消息的会话），默认为False
+    
+    Returns:
+        会话列表和分页信息
+    """
     try:
         from app.services.chat_service import ChatService
         
         chat_service = ChatService()
-        result = await chat_service.get_sessions(page=page, page_size=page_size)
+        result = await chat_service.get_sessions(page=page, page_size=page_size, include_empty=include_empty)
         
         return {
             "sessions": result.get('sessions', []),
             "total": result.get('total', 0),
             "page": result.get('page', page),
-            "page_size": result.get('page_size', page_size)
+            "page_size": result.get('page_size', page_size),
+            "include_empty": result.get('include_empty', include_empty)
         }
     except Exception as e:
         logger.error(f"获取会话列表失败: {str(e)}")

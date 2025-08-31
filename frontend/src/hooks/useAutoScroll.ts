@@ -7,7 +7,7 @@ interface UseAutoScrollOptions {
 }
 
 export const useAutoScroll = (options: UseAutoScrollOptions = {}) => {
-  const { dependencies = [], enabled = true, delay = 50 } = options;
+  const { dependencies = [], enabled = true, delay = 100 } = options;
   
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -24,7 +24,7 @@ export const useAutoScroll = (options: UseAutoScrollOptions = {}) => {
     }
   }, []);
 
-  // 检查是否应该自动滚动
+  // 检查是否应该自动滚动（用户接近底部）
   const shouldAutoScroll = useCallback(() => {
     if (!containerRef.current || !enabled) return false;
     
@@ -35,56 +35,72 @@ export const useAutoScroll = (options: UseAutoScrollOptions = {}) => {
     return scrollHeight - scrollTop - clientHeight < 100;
   }, [enabled]);
 
-  // 执行滚动到底部
-  const scrollToBottom = useCallback((force = false) => {
-    if (!containerRef.current || !endRef.current) return;
-    if (!force && !shouldAutoScroll()) return;
+  // 强制滚动到底部（立即定位）
+  const forceScrollToBottom = useCallback(() => {
+    if (!endRef.current || !containerRef.current) return;
 
     cleanup();
 
-    const performScroll = () => {
-      try {
-        const container = containerRef.current;
-        const endElement = endRef.current;
-        
-        if (container && endElement) {
-          // 使用 scrollIntoView 平滑滚动
-          endElement.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'end',
-            inline: 'nearest'
-          });
-          
-          // 备用方案：直接设置 scrollTop
-          timeoutRef.current = setTimeout(() => {
-            if (container) {
-              container.scrollTop = container.scrollHeight;
-            }
-          }, 100);
+    try {
+      const endElement = endRef.current;
+      const container = containerRef.current;
+      
+      // 使用 'auto' 模式立即定位
+      endElement.scrollIntoView({ 
+        behavior: 'auto', 
+        block: 'end',
+        inline: 'nearest'
+      });
+      
+      // 备用方案：直接设置 scrollTop
+      setTimeout(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight;
         }
-      } catch (error) {
-        console.warn('滚动失败:', error);
-      }
-    };
+      }, 50);
+    } catch (error) {
+      console.warn('强制滚动失败:', error);
+    }
+  }, [cleanup]);
 
-    // 延迟执行滚动，确保DOM已更新
-    timeoutRef.current = setTimeout(performScroll, delay);
-  }, [shouldAutoScroll, cleanup, delay]);
-
-  // 强制滚动到底部（忽略用户位置）
-  const forceScrollToBottom = useCallback(() => {
-    scrollToBottom(true);
-  }, [scrollToBottom]);
-
-  // 平滑滚动（考虑用户位置）
+  // 平滑滚动到底部
   const smoothScrollToBottom = useCallback(() => {
-    scrollToBottom(false);
-  }, [scrollToBottom]);
+    if (!endRef.current || !containerRef.current) return;
+    if (!shouldAutoScroll()) return; // 只有在用户接近底部时才平滑滚动
+
+    cleanup();
+
+    try {
+      const endElement = endRef.current;
+      
+      // 使用 'smooth' 模式平滑滚动
+      endElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'end',
+        inline: 'nearest'
+      });
+    } catch (error) {
+      console.warn('平滑滚动失败:', error);
+    }
+  }, [shouldAutoScroll, cleanup]);
+
+  // 延迟滚动（确保DOM更新完成）
+  const delayedScrollToBottom = useCallback((force = false) => {
+    cleanup();
+    
+    timeoutRef.current = setTimeout(() => {
+      if (force) {
+        forceScrollToBottom();
+      } else {
+        smoothScrollToBottom();
+      }
+    }, delay);
+  }, [forceScrollToBottom, smoothScrollToBottom, delay, cleanup]);
 
   // 监听依赖项变化，自动触发滚动
   useEffect(() => {
     if (enabled && dependencies.length > 0) {
-      forceScrollToBottom();
+      delayedScrollToBottom(true);
     }
   }, [...dependencies, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -96,8 +112,9 @@ export const useAutoScroll = (options: UseAutoScrollOptions = {}) => {
   return {
     containerRef,
     endRef,
-    scrollToBottom: smoothScrollToBottom,
     forceScrollToBottom,
+    smoothScrollToBottom,
+    delayedScrollToBottom,
     shouldAutoScroll,
   };
 };
