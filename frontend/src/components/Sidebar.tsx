@@ -12,8 +12,6 @@ import {
   Button,
   useTheme,
   useMediaQuery,
-  Fade,
-  Slide,
   Avatar,
   IconButton,
   Menu,
@@ -90,6 +88,16 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
       }
     }
   }, [currentSession, sessions]);
+
+  // 监听屏幕尺寸变化，调整侧边栏状态
+  useEffect(() => {
+    if (isMobile) {
+      setDrawerWidth(window.innerWidth * 0.8); // 移动端使用80%宽度
+    } else {
+      setDrawerWidth(280); // PC端恢复默认宽度
+    }
+    // 移动端也支持折叠模式，与PC端保持一致
+  }, [isMobile]);
 
   // 日期分组函数
   const groupSessionsByDate = (sessions: any[]) => {
@@ -253,7 +261,15 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
      onWidthChange?.(newCollapsed ? collapsedWidth : drawerWidth);
    };
 
-  const effectiveWidth = collapsed ? collapsedWidth : (isMobile ? '100vw' : `${drawerWidth}px`);
+  const effectiveWidth = collapsed ? collapsedWidth : (isMobile ? '80vw' : `${drawerWidth}px`);
+  const mobileCollapsedWidth = 60; // 移动端折叠宽度
+
+  const getMobileEffectiveWidth = () => {
+    if (!isMobile) return effectiveWidth;
+    return collapsed ? `${mobileCollapsedWidth}px` : '80vw';
+  };
+
+  const finalEffectiveWidth = getMobileEffectiveWidth();
 
   const drawerContent = (
     <AnimatedBox animation="fadeInLeft" duration="0.4s">
@@ -278,17 +294,57 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
         {isMobile && (
           <Box
             sx={{
-              p: 1,
+              p: 1.5,
               display: 'flex',
-              justifyContent: 'flex-end',
+              justifyContent: collapsed ? 'center' : 'space-between',
+              alignItems: 'center',
               borderBottom: '1px solid',
               borderColor: 'divider',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              minHeight: 56, // 确保有足够的点击区域
             }}
           >
-            <IconButton onClick={onToggle} edge="end">
-              <CloseIcon />
+            <IconButton 
+              onClick={toggleCollapse} 
+              size="large"
+              sx={{
+                width: 44,
+                height: 44,
+                bgcolor: 'action.hover',
+                border: '1px solid',
+                borderColor: 'divider',
+                '&:hover': {
+                  bgcolor: 'primary.light',
+                  borderColor: 'primary.main',
+                },
+              }}
+            >
+              {collapsed ? (
+                <ChevronRightIcon sx={{ fontSize: 24, fontWeight: 'bold' }} />
+              ) : (
+                <ChevronLeftIcon sx={{ fontSize: 24, fontWeight: 'bold' }} />
+              )}
             </IconButton>
+            {!collapsed && (
+              <IconButton 
+                onClick={onToggle} 
+                edge="end"
+                size="large"
+                sx={{
+                  width: 44,
+                  height: 44,
+                  bgcolor: 'action.hover',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': {
+                    bgcolor: 'error.light',
+                    borderColor: 'error.main',
+                  },
+                }}
+              >
+                <CloseIcon sx={{ fontSize: 24, fontWeight: 'bold' }} />
+              </IconButton>
+            )}
           </Box>
         )}
 
@@ -383,23 +439,21 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
       >
           {sessions.length === 0 ? (
             !collapsed && (
-              <Fade in timeout={300}>
-                <Box sx={{ px: 2.5, py: 3, textAlign: 'center' }}>
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary"
-                    sx={{ mb: 1, fontWeight: 500 }}
-                  >
-                    暂无对话
-                  </Typography>
-                  <Typography 
-                    variant="caption" 
-                    color="text.secondary"
-                  >
-                    创建新对话开始使用
-                  </Typography>
-                </Box>
-              </Fade>
+              <Box sx={{ px: 2.5, py: 3, textAlign: 'center' }}>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary"
+                  sx={{ mb: 1, fontWeight: 500 }}
+                >
+                  暂无对话
+                </Typography>
+                <Typography 
+                  variant="caption" 
+                  color="text.secondary"
+                >
+                  创建新对话开始使用
+                </Typography>
+              </Box>
             )
           ) : (
             Object.entries(groupSessionsByDate(sessions)).map(([groupName, groupSessions]) => {
@@ -455,97 +509,90 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                   <Collapse in={collapsed || expandedGroups.has(groupName)} timeout="auto">
                     <List sx={{ p: 0 }}>
                       {groupSessions.map((session, index) => (
-                        <Slide 
-                          key={session.id} 
-                          direction="right" 
-                          in 
-                          timeout={200 + index * 50}
-                        >
-                          <ListItem disablePadding sx={{ px: collapsed ? 0.5 : 1.5, mb: 0.5 }}>
-                            <HoverAnimatedBox hoverAnimation="scale" sx={{ width: '100%' }}>
-                              <ListItemButton
-                                selected={session.id === currentSession}
-                                onClick={() => handleSessionClick(session.id)}
-                                sx={{
-                                  borderRadius: 2,
-                                  py: 1.5,
-                                  pr: collapsed ? 0.5 : 1,
-                                  pl: collapsed ? 0.5 : 2,
-                                  justifyContent: collapsed ? 'center' : 'flex-start',
-                                  transition: 'all 0.2s ease-in-out',
-                                  '&.Mui-selected': {
-                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                    color: 'white',
-                                    boxShadow: '0 4px 12px rgba(103, 126, 234, 0.3)',
-                                    '&:hover': {
-                                      background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
-                                      transform: 'translateX(4px)',
-                                    },
-                                  },
+                        <ListItem key={session.id} disablePadding sx={{ px: collapsed ? 0.5 : 1.5, mb: 0.5 }}>
+                          <HoverAnimatedBox hoverAnimation="scale" sx={{ width: '100%' }}>
+                            <ListItemButton
+                              selected={session.id === currentSession}
+                              onClick={() => handleSessionClick(session.id)}
+                              sx={{
+                                borderRadius: 2,
+                                py: 1.5,
+                                pr: collapsed ? 0.5 : 1,
+                                pl: collapsed ? 0.5 : 2,
+                                justifyContent: collapsed ? 'center' : 'flex-start',
+                                transition: 'all 0.2s ease-in-out',
+                                '&.Mui-selected': {
+                                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                  color: 'white',
+                                  boxShadow: '0 4px 12px rgba(103, 126, 234, 0.3)',
                                   '&:hover': {
-                                    bgcolor: 'action.hover',
-                                    transform: 'translateX(2px)',
+                                    background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
+                                    transform: 'translateX(4px)',
                                   },
-                                }}
-                              >
-                                <ListItemIcon sx={{ minWidth: collapsed ? 'auto' : 40, justifyContent: 'center' }}>
-                                  <HoverAnimatedBox hoverAnimation="scale">
-                                    <Avatar
-                                      sx={{
-                                        width: 32,
-                                        height: 32,
-                                        bgcolor: session.id === currentSession 
-                                          ? 'rgba(255,255,255,0.2)' 
-                                          : 'primary.main',
-                                        fontSize: '0.875rem',
-                                      }}
-                                    >
-                                      <ChatIcon fontSize="small" />
-                                    </Avatar>
-                                  </HoverAnimatedBox>
-                                </ListItemIcon>
-                                {!collapsed && (
-                                  <ListItemText
-                                    primary={session.title}
-                                    secondary={`${session.messageCount} 条消息`}
-                                    primaryTypographyProps={{
-                                      noWrap: true,
-                                      fontSize: isMobile ? '0.85rem' : '0.9rem',
-                                      fontWeight: 500,
-                                    }}
-                                    secondaryTypographyProps={{
-                                      fontSize: isMobile ? '0.7rem' : '0.75rem',
-                                      sx: {
-                                        color: session.id === currentSession 
-                                          ? 'rgba(255,255,255,0.8)' 
-                                          : 'text.secondary',
-                                      },
-                                    }}
-                                  />
-                                )}
-                                {!collapsed && (
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => handleMenuOpen(e, session.id)}
+                                },
+                                '&:hover': {
+                                  bgcolor: 'action.hover',
+                                  transform: 'translateX(2px)',
+                                },
+                              }}
+                            >
+                              <ListItemIcon sx={{ minWidth: collapsed ? 'auto' : 40, justifyContent: 'center' }}>
+                                <HoverAnimatedBox hoverAnimation="scale">
+                                  <Avatar
                                     sx={{
-                                      ml: 1,
-                                      opacity: 0.7,
-                                      color: session.id === currentSession ? 'white' : 'text.secondary',
-                                      '&:hover': {
-                                        opacity: 1,
-                                        bgcolor: session.id === currentSession 
-                                          ? 'rgba(255,255,255,0.1)' 
-                                          : 'action.hover',
-                                      },
+                                      width: 32,
+                                      height: 32,
+                                      bgcolor: session.id === currentSession 
+                                        ? 'rgba(255,255,255,0.2)' 
+                                        : 'primary.main',
+                                      fontSize: '0.875rem',
                                     }}
                                   >
-                                    <MoreVertIcon fontSize="small" />
-                                  </IconButton>
-                                )}
-                              </ListItemButton>
-                            </HoverAnimatedBox>
-                          </ListItem>
-                        </Slide>
+                                    <ChatIcon fontSize="small" />
+                                  </Avatar>
+                                </HoverAnimatedBox>
+                              </ListItemIcon>
+                              {!collapsed && (
+                                <ListItemText
+                                  primary={session.title}
+                                  secondary={`${session.messageCount} 条消息`}
+                                  primaryTypographyProps={{
+                                    noWrap: true,
+                                    fontSize: isMobile ? '0.85rem' : '0.9rem',
+                                    fontWeight: 500,
+                                  }}
+                                  secondaryTypographyProps={{
+                                    fontSize: isMobile ? '0.7rem' : '0.75rem',
+                                    sx: {
+                                      color: session.id === currentSession 
+                                        ? 'rgba(255,255,255,0.8)' 
+                                        : 'text.secondary',
+                                    },
+                                  }}
+                                />
+                              )}
+                              {!collapsed && (
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => handleMenuOpen(e, session.id)}
+                                  sx={{
+                                    ml: 1,
+                                    opacity: 0.7,
+                                    color: session.id === currentSession ? 'white' : 'text.secondary',
+                                    '&:hover': {
+                                      opacity: 1,
+                                      bgcolor: session.id === currentSession 
+                                        ? 'rgba(255,255,255,0.1)' 
+                                        : 'action.hover',
+                                    },
+                                  }}
+                                >
+                                  <MoreVertIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                            </ListItemButton>
+                          </HoverAnimatedBox>
+                        </ListItem>
                       ))}
                     </List>
                   </Collapse>
@@ -563,35 +610,78 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
 
   return (
     <>
-      {/* 响应式切换按钮 */}
-      {!open && (
-        <Fade in timeout={200}>
-          <AccessibleIconButton
-            onClick={onToggle}
-            aria-label="打开侧边栏"
-            sx={{
-              position: 'fixed',
-              top: isMobile ? 12 : 16,
-              left: isMobile ? 12 : 16,
-              zIndex: 1300,
-              width: isMobile ? 48 : 56,
-              height: isMobile ? 48 : 56,
-              bgcolor: 'background.paper',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              border: '1px solid',
-              borderColor: 'divider',
-              transition: 'all 0.2s ease-in-out',
-              '&:hover': {
-                bgcolor: 'primary.main',
-                color: 'primary.contrastText',
-                transform: 'scale(1.05)',
-                boxShadow: '0 6px 16px rgba(103, 126, 234, 0.3)',
-              },
-            }}
-          >
-            <MenuIcon fontSize={isMobile ? 'medium' : 'large'} />
-          </AccessibleIconButton>
-        </Fade>
+      {/* 移动端背景遮罩层 */}
+      {isMobile && open && (
+        <Box
+          onClick={collapsed ? undefined : onToggle}
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: collapsed ? 'transparent' : 'rgba(0, 0, 0, 0.3)',
+            zIndex: 799,
+            cursor: collapsed ? 'default' : 'pointer',
+          }}
+        />
+      )}
+
+      {/* 移动端打开侧边栏按钮 */}
+      {!open && isMobile && (
+        <AccessibleIconButton
+          onClick={onToggle}
+          aria-label="打开侧边栏"
+          sx={{
+            position: 'fixed',
+            top: 16,
+            left: 16,
+            zIndex: 1300,
+            width: 56,
+            height: 56,
+            bgcolor: 'primary.main',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(103, 126, 234, 0.3)',
+            border: '2px solid white',
+            transition: 'all 0.2s ease-in-out',
+            '&:hover': {
+              bgcolor: 'primary.dark',
+              transform: 'scale(1.05)',
+              boxShadow: '0 6px 16px rgba(103, 126, 234, 0.4)',
+            },
+          }}
+        >
+          <ChevronRightIcon sx={{ fontSize: 28, fontWeight: 'bold' }} />
+        </AccessibleIconButton>
+      )}
+
+      {/* PC端打开侧边栏按钮 */}
+      {!open && !isMobile && (
+        <AccessibleIconButton
+          onClick={onToggle}
+          aria-label="打开侧边栏"
+          sx={{
+            position: 'fixed',
+            top: 16,
+            left: 16,
+            zIndex: 1300,
+            width: 56,
+            height: 56,
+            bgcolor: 'background.paper',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            border: '1px solid',
+            borderColor: 'divider',
+            transition: 'all 0.2s ease-in-out',
+            '&:hover': {
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
+              transform: 'scale(1.05)',
+              boxShadow: '0 6px 16px rgba(103, 126, 234, 0.3)',
+            },
+          }}
+        >
+          <MenuIcon fontSize="large" />
+        </AccessibleIconButton>
       )}
 
       {/* 响应式侧边栏 */}
@@ -604,26 +694,22 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
           keepMounted: true, // Better open performance on mobile.
         }}
         sx={{
-          width: effectiveWidth,
+          width: finalEffectiveWidth,
           flexShrink: 0,
           zIndex: 800,
           transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '& .MuiDrawer-paper': {
-            width: effectiveWidth,
+            width: finalEffectiveWidth,
             boxSizing: 'border-box',
             borderRight: isMobile ? 'none' : '1px solid',
             borderColor: 'divider',
             boxShadow: isMobile ? '0 8px 32px rgba(0,0,0,0.12)' : 'none',
             position: 'fixed',
-            top: '64px',
+            top: isMobile ? '0' : '64px',
             transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            height: 'calc(100vh - 64px)',
-            maxHeight: 'calc(100vh - 64px)',
+            height: isMobile ? '100vh' : 'calc(100vh - 64px)',
+            maxHeight: isMobile ? '100vh' : 'calc(100vh - 64px)',
             overflow: 'hidden',
-            ...(isMobile && {
-              height: '100vh',
-              maxHeight: '100vh',
-            }),
           },
         }}
       >

@@ -7,10 +7,9 @@ import {
   Typography,
   Alert,
   Snackbar,
-  Fade,
-  Slide,
-  Grow,
   Button,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 
 import ChatInterface from '@/components/ChatInterface';
@@ -31,7 +30,10 @@ const ChatPage: React.FC = () => {
     setError,
   } = useChatStore();
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [sidebarWidth, setSidebarWidth] = useState(280);
 
   useEffect(() => {
@@ -71,23 +73,21 @@ const ChatPage: React.FC = () => {
   };
 
   const handleSidebarWidthChange = (width: number) => {
-    setSidebarWidth(width);
+    if (!isMobile) {
+      setSidebarWidth(width);
+    }
   };
 
   return (
     <AnimatedBox animation="fadeInUp" duration="0.5s">
       <Box sx={{ height: '100vh', display: 'flex' }}>
         {/* 侧边栏 */}
-        <Slide direction="right" in={sidebarOpen} timeout={300}>
-          <Box>
-            <Sidebar
-              open={sidebarOpen}
-              onToggle={() => setSidebarOpen(!sidebarOpen)}
-              onCreateSession={handleCreateSession}
-              onWidthChange={handleSidebarWidthChange}
-            />
-          </Box>
-        </Slide>
+        <Sidebar
+          open={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          onCreateSession={handleCreateSession}
+          onWidthChange={handleSidebarWidthChange}
+        />
 
         {/* 主内容区域 */}
         <Box
@@ -96,15 +96,13 @@ const ChatPage: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             transition: 'padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            paddingLeft: sidebarOpen ? `${sidebarWidth}px` : '0px',
+            paddingLeft: sidebarOpen && !isMobile ? `${sidebarWidth}px` : '0px',
           }}
         >
           {currentSession ? (
-            <Fade in timeout={600}>
-              <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-                <ChatInterface sessionId={currentSession} />
-              </Box>
-            </Fade>
+            <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+              <ChatInterface sessionId={currentSession} />
+            </Box>
           ) : (
             <AnimatedBox animation="fadeInUp" duration="0.8s" delay="0.2s">
               <Container maxWidth="md" sx={{ mt: 8 }}>
@@ -181,40 +179,38 @@ const ChatPage: React.FC = () => {
 
 
         {/* 错误提示 */}
-        <Grow in={!!error} timeout={400}>
-          <Box>
-            <Snackbar
-              open={!!error}
-              autoHideDuration={6000}
-              onClose={handleCloseError}
-              anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        {error && (
+          <Snackbar
+            open={!!error}
+            autoHideDuration={6000}
+            onClose={handleCloseError}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          >
+            <Alert 
+              onClose={handleCloseError} 
+              severity="error" 
+              sx={{ 
+                width: '100%',
+                '& .MuiAlert-icon': {
+                  animation: 'pulse 2s infinite',
+                },
+                '@keyframes pulse': {
+                  '0%': {
+                    transform: 'scale(1)',
+                  },
+                  '50%': {
+                    transform: 'scale(1.1)',
+                  },
+                  '100%': {
+                    transform: 'scale(1)',
+                  },
+                },
+              }}
             >
-              <Alert 
-                onClose={handleCloseError} 
-                severity="error" 
-                sx={{ 
-                  width: '100%',
-                  '& .MuiAlert-icon': {
-                    animation: 'pulse 2s infinite',
-                  },
-                  '@keyframes pulse': {
-                    '0%': {
-                      transform: 'scale(1)',
-                    },
-                    '50%': {
-                      transform: 'scale(1.1)',
-                    },
-                    '100%': {
-                      transform: 'scale(1)',
-                    },
-                  },
-                }}
-              >
-                {error}
-              </Alert>
-            </Snackbar>
-          </Box>
-        </Grow>
+              {error}
+            </Alert>
+          </Snackbar>
+        )}
       </Box>
     </AnimatedBox>
   );
