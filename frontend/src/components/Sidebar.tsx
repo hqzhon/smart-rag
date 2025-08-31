@@ -97,7 +97,11 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
       setDrawerWidth(280); // PC端恢复默认宽度
     }
     // 移动端也支持折叠模式，与PC端保持一致
-  }, [isMobile]);
+    
+    // 立即同步宽度给父组件
+    const currentWidth = collapsed ? collapsedWidth : (isMobile ? window.innerWidth * 0.8 : 280);
+    onWidthChange?.(currentWidth);
+  }, [isMobile, collapsed, onWidthChange]);
 
   // 日期分组函数
   const groupSessionsByDate = (sessions: any[]) => {
@@ -209,7 +213,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
     if (session) {
       // 设置当前会话
       setCurrentSession(sessionId);
-      // 加载会话的完整消息历史
+      // 加载会话的完整消息历史(已在chatStore中处理滚动)
       await loadChatHistory(sessionId);
       // 更新URL
       window.history.pushState(null, '', `/chat/${sessionId}`);
@@ -217,13 +221,6 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
       if (isMobile) {
         onToggle();
       }
-      // 滚动到聊天界面底部 - 增加延迟以等待数据渲染
-      setTimeout(() => {
-        const messagesEnd = document.querySelector('[data-messages-end]');
-        if (messagesEnd) {
-          messagesEnd.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 500);
     }
   };
 
@@ -258,7 +255,9 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
   const toggleCollapse = () => {
      const newCollapsed = !collapsed;
      setCollapsed(newCollapsed);
-     onWidthChange?.(newCollapsed ? collapsedWidth : drawerWidth);
+     const newWidth = newCollapsed ? collapsedWidth : drawerWidth;
+     setDrawerWidth(newWidth);
+     onWidthChange?.(newWidth);
    };
 
   const effectiveWidth = collapsed ? collapsedWidth : (isMobile ? '80vw' : `${drawerWidth}px`);

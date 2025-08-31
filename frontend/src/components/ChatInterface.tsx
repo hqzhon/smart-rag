@@ -36,42 +36,52 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
   // 获取当前会话的消息
   const sessionMessages = messages[sessionId] || [];
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // 简单直接的滚动到底部函数
+  const scrollToBottom = (force = false) => {
+    if (!messagesEndRef.current) return;
+    
+    try {
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: force ? 'auto' : 'smooth',
+        block: 'end' 
+      });
+    } catch (error) {
+      console.warn('滚动失败:', error);
+    }
   };
 
-  // 检查是否需要自动滚动
-  const shouldAutoScroll = () => {
-    if (!messageContainerRef.current) return true;
-    
-    const container = messageContainerRef.current;
-    const scrollTop = container.scrollTop;
-    const scrollHeight = container.scrollHeight;
-    const clientHeight = container.clientHeight;
-    
-    // 如果用户滚动到接近底部（距离底部小于100px），则自动滚动
-    return scrollHeight - scrollTop - clientHeight < 100;
-  };
-
+  // 1. 新消息时自动滚动
   useEffect(() => {
-    // 新消息时总是滚动到底部
-    scrollToBottom();
+    if (sessionMessages.length > 0) {
+      setTimeout(() => scrollToBottom(true), 100);
+    }
   }, [sessionMessages.length]);
 
+  // 2. 切换会话时滚动到底部
   useEffect(() => {
-    // 流式输出时，只有在用户接近底部时才自动滚动
-    if (streamingMessage && shouldAutoScroll()) {
-      // 使用requestAnimationFrame确保DOM更新后再滚动
-      requestAnimationFrame(() => {
-        scrollToBottom();
-      });
+    if (sessionMessages.length > 0) {
+      setTimeout(() => scrollToBottom(true), 300);
+    }
+  }, [sessionId]);
+
+  // 3. 流式输出时跟踪滚动
+  useEffect(() => {
+    if (streamingMessage?.content) {
+      scrollToBottom(false); // 使用平滑滚动
     }
   }, [streamingMessage?.content]);
 
   const handleSendMessage = async (content: string) => {
     try {
-      console.log('发送消息:', content, '会话ID:', sessionId);
+      console.log('发送消息:', content, '会话 ID:', sessionId);
+      
+      // 4. 发送消息时立即滚动
+      scrollToBottom(true);
+      
       await sendStreamMessage(sessionId, content);
+      
+      // 发送后再次确保滚动
+      setTimeout(() => scrollToBottom(true), 200);
     } catch (error) {
       console.error('发送消息失败:', error);
     }
@@ -161,18 +171,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
           minHeight: 0, // 确保flex子元素可以收缩
         }}
       >
-        <Container
+        <Box
           ref={messageContainerRef}
-          maxWidth={false}
           sx={{
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
-            py: 1,
-            px: 2,
-            maxWidth: '100%',
+            // 完全去除所有间距，让内容紧贴侧边栏
+            padding: 0,
+            margin: 0,
+            width: '100%',
             overflow: 'auto',
-            minHeight: 0, // 确保容器可以收缩
+            minHeight: 0,
           }}
         >
           <Fade in timeout={300}>
@@ -182,6 +192,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
+                // 只在这里添加最小的内边距，避免消息贴边
+                px: 1, // 减少为1，更紧凑
+                py: 1,
               }}
             >
               <MessageList
@@ -192,7 +205,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
               <div ref={messagesEndRef} data-messages-end />
             </Box>
           </Fade>
-        </Container>
+        </Box>
       </Box>
 
       {/* 现代化输入区域 */}
@@ -220,7 +233,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
             },
           }}
         >
-          <Container maxWidth={false} sx={{ px: 3, py: 2 }}>
+          <Box sx={{ px: 1, py: 1.5 }}>
             <AnimatedBox animation="fadeInUp" delay="0.3s">
               <Box sx={{ py: 1 }}>
                 <ChatInput
@@ -230,7 +243,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
                 />
               </Box>
             </AnimatedBox>
-          </Container>
+          </Box>
         </Paper>
       </Slide>
     </Box>

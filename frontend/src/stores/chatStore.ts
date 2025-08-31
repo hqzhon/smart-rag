@@ -179,6 +179,7 @@ export const useChatStore = create<ChatStore>()(
             messages: { ...state.messages, [sessionId]: messages },
             isLoading: false,
           }));
+          
         } catch (error) {
           console.error('加载聊天历史失败:', error);
           set({ 

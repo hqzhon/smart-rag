@@ -73,14 +73,33 @@ const ChatPage: React.FC = () => {
   };
 
   const handleSidebarWidthChange = (width: number) => {
+    console.log('侧边栏宽度变化:', width);
     if (!isMobile) {
+      setSidebarWidth(width);
+    } else {
+      // 移动端也需要更新宽度，但不会影响布局
       setSidebarWidth(width);
     }
   };
 
   return (
     <AnimatedBox animation="fadeInUp" duration="0.5s">
-      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', minHeight: 0 }}>
+      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', minHeight: 0, position: 'relative' }}>
+        {/* 调试信息 */}
+        {process.env.NODE_ENV === 'development' && (
+          <Box sx={{ 
+            position: 'fixed', 
+            top: 70, 
+            right: 10, 
+            bgcolor: 'black', 
+            color: 'white', 
+            p: 1, 
+            fontSize: 12, 
+            zIndex: 9999 
+          }}>
+            Sidebar: {sidebarOpen ? 'Open' : 'Closed'} | Width: {sidebarWidth}px | Mobile: {isMobile ? 'Yes' : 'No'}
+          </Box>
+        )}
         {/* 侧边栏 */}
         <Sidebar
           open={sidebarOpen}
@@ -95,8 +114,28 @@ const ChatPage: React.FC = () => {
             flexGrow: 1,
             display: 'flex',
             flexDirection: 'column',
-            transition: 'padding-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            paddingLeft: sidebarOpen && !isMobile ? `${sidebarWidth}px` : '0px',
+            // 使用transform代替marginLeft，更直接
+            transform: (() => {
+              if (isMobile) return 'translateX(0)';  
+              if (!sidebarOpen) return 'translateX(0)';
+              return `translateX(${sidebarWidth}px)`;
+            })(),
+            // 强制设置位置和尺寸
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: (() => {
+              if (isMobile) return '100%';
+              if (!sidebarOpen) return '100%';
+              return `calc(100% - ${sidebarWidth}px)`;
+            })(),
+            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            padding: 0,
+            margin: 0,
+            overflow: 'hidden',
+            zIndex: 1,
           }}
         >
           {currentSession ? (
