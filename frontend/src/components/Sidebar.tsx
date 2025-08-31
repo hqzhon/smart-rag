@@ -607,7 +607,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle, onCreateSession, onWi
                   {/* 会话列表 */}
                   <Collapse in={collapsed || expandedGroups.has(groupName)} timeout="auto">
                     <List sx={{ p: 0 }}>
-                      {groupSessions.map((session, index) => {
+                      {groupSessions.map((session) => {
                         const isSelected = session.id === currentSession;
                         
                         // 选中状态处理逻辑

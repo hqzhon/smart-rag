@@ -222,7 +222,7 @@ export const useChatStore = create<ChatStore>()(
               onDocuments: (documents: any[], messageId?: string) => {
                 get().appendDocuments(documents, messageId);
               },
-              onStatus: (status: string) => {
+              onStatus: () => {
                 // 处理状态更新
               },
               onError: (error: string) => {

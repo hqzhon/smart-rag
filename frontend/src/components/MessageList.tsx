@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useMemo, useRef, useImperativeHandle, forwardRef } from 'react';
 import {
   Box,
   List,
