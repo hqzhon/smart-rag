@@ -80,10 +80,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
   return (
     <Box
       sx={{
-        height: '100vh',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         bgcolor: 'background.default',
+        minHeight: 0, // 确保flex子元素可以收缩
       }}
     >
 
@@ -125,6 +126,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
+          minHeight: 0, // 确保flex子元素可以收缩
         }}
       >
         <Container
@@ -138,6 +140,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
             px: 2,
             maxWidth: '100%',
             overflow: 'auto',
+            minHeight: 0, // 确保容器可以收缩
           }}
         >
           <Fade in timeout={300}>
@@ -169,6 +172,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ sessionId }) => {
             borderColor: 'divider',
             background: 'rgba(255, 255, 255, 0.8)',
             backdropFilter: 'blur(10px)',
+            position: 'sticky',
+            bottom: 0,
+            zIndex: 10,
+            flexShrink: 0, // 防止输入框被压缩
           }}
         >
           <Container maxWidth={false} sx={{ px: 2 }}>

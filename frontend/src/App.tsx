@@ -38,7 +38,7 @@ const AnimatedRoutes: React.FC = () => {
   return (
     <AnimatedBox animation="fadeInUp" duration="0.6s">
       <Fade in timeout={600}>
-        <Box sx={{ flex: 1, overflow: 'auto' }}>
+        <Box sx={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
           <Routes location={location}>
             <Route path="/" element={<FileManagementPage />} />
             <Route path="/files" element={<FileManagementPage />} />

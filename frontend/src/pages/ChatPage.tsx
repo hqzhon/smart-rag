@@ -80,7 +80,7 @@ const ChatPage: React.FC = () => {
 
   return (
     <AnimatedBox animation="fadeInUp" duration="0.5s">
-      <Box sx={{ height: '100vh', display: 'flex' }}>
+      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex', minHeight: 0 }}>
         {/* 侧边栏 */}
         <Sidebar
           open={sidebarOpen}
@@ -100,7 +100,7 @@ const ChatPage: React.FC = () => {
           }}
         >
           {currentSession ? (
-            <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <ChatInterface sessionId={currentSession} />
             </Box>
           ) : (
