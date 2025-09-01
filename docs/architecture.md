@@ -34,7 +34,7 @@ flowchart TD
         H --> N[关键词 Keywords];
         I --> O[摘要 Summary];
     end
-    L & M & N & O --> P[处理完成];
+    K --> P[处理完成];
 ```
 
 ### 2.2. 检索问答流程 (Query Flow)
@@ -46,14 +46,14 @@ flowchart TD
     A[用户查询] --> B{QueryTransformer};
     B --> C[查询重写与扩展];
     C --> D{AdvancedFusionRetriever};
-    subgraph D
+    subgraph D [四路并行召回]
         direction LR
         C --> D1[路径1: Vector查询];
         C --> D2[路径2: Content查询];
         C --> D3[路径3: Summary查询];
         C --> D4[路径4: Keywords查询];
     end
-    D1 & D2 & D3 & D4 --> E[四路召回结果];
+    D --> E[四路召回结果];
     E --> F{RRF 结果融合};
     F --> G[初步排序列表];
     G --> H{EnhancedReranker};
