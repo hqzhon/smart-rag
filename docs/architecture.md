@@ -19,9 +19,9 @@
 ```mermaid
 flowchart TD
     A[用户上传PDF文档] --> B{EnhancedPDFProcessor};
-    B --> C[解析与内容提取<br>(文本, 表格等)];
+    B --> C[解析与内容提取<br>文本, 表格等];
     C --> D{MedicalTextSplitter};
-    D --> E[双模智能分块<br>(语义/递归)];
+    D --> E[双模智能分块<br>语义/递归];
     E --> F[生成文档块 Chunks];
     F --> G{元数据生成模块};
     G --> H[提取关键词<br>Keywords];
