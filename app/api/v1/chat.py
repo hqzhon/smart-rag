@@ -316,10 +316,14 @@ async def update_session(session_id: str, update_data: Dict[str, Any]):
         if not title and not metadata:
             raise HTTPException(status_code=400, detail="请提供要更新的标题或元数据")
         
+        # 判断是否仅仅是重命名操作（只更新title且没有metadata）
+        is_rename_only = title is not None and metadata is None
+        
         success = await chat_service.update_session(
             session_id, 
             title=title if title is not None else None, 
-            metadata=metadata if metadata is not None else None
+            metadata=metadata if metadata is not None else None,
+            update_timestamp=not is_rename_only  # 重命名时不更新时间戳
         )
         
         if success:
@@ -354,11 +358,15 @@ async def patch_session(session_id: str, update_data: Dict[str, Any]):
         if not title and not metadata:
             raise HTTPException(status_code=400, detail="请提供要更新的字段")
         
-        # 执行更新
+        # 判断是否仅仅是重命名操作（只更新title且没有metadata）
+        is_rename_only = title is not None and metadata is None
+        
+        # 执行更新，重命名时不更新时间戳
         success = await chat_service.update_session(
             session_id, 
             title=title if title is not None else None, 
-            metadata=metadata if metadata is not None else None
+            metadata=metadata if metadata is not None else None,
+            update_timestamp=not is_rename_only  # 重命名时不更新时间戳
         )
         
         if success:

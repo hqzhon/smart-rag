@@ -368,13 +368,14 @@ class ChatService:
             logger.error(f"删除会话失败: {str(e)}")
             return False
     
-    async def update_session(self, session_id: str, title: str = None, metadata: dict = None) -> bool:
+    async def update_session(self, session_id: str, title: str = None, metadata: dict = None, update_timestamp: bool = True) -> bool:
         """更新会话信息
         
         Args:
             session_id: 会话ID
             title: 新标题
             metadata: 新元数据
+            update_timestamp: 是否更新时间戳，默认为True，重命名时设为False避免影响排序
             
         Returns:
             更新是否成功
@@ -394,10 +395,10 @@ class ChatService:
                 logger.warning(f"没有提供更新数据: {session_id}")
                 return False
                 
-            success = db.update_session(session_id, update_data)
+            success = db.update_session(session_id, update_data, update_timestamp=update_timestamp)
             
             if success:
-                logger.info(f"会话更新成功: {session_id}")
+                logger.info(f"会话更新成功: {session_id}, 更新时间戳: {update_timestamp}")
                 return True
             else:
                 logger.warning(f"会话更新失败，会话可能不存在: {session_id}")

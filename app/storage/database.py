@@ -475,8 +475,17 @@ class DatabaseManager(metaclass=SingletonMeta):
             logger.error(f"删除会话失败: {e}")
             return False
     
-    def update_session(self, session_id: str, update_data: Dict[str, Any]) -> bool:
-        """更新会话信息"""
+    def update_session(self, session_id: str, update_data: Dict[str, Any], update_timestamp: bool = True) -> bool:
+        """更新会话信息
+        
+        Args:
+            session_id: 会话ID
+            update_data: 要更新的数据字典，可包含title、metadata等字段
+            update_timestamp: 是否更新updated_at时间戳，默认为True
+            
+        Returns:
+            更新是否成功
+        """
         try:
             if not update_data:
                 return False
@@ -496,8 +505,12 @@ class DatabaseManager(metaclass=SingletonMeta):
             if not set_clauses:
                 return False
                 
-            # 添加updated_at字段
-            set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+            # 根据参数决定是否更新时间戳
+            if update_timestamp:
+                set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+            else:
+                # 不更新时间戳时，明确保持原有时间戳以覆盖MySQL的ON UPDATE CURRENT_TIMESTAMP
+                set_clauses.append("updated_at = updated_at")
             values.append(session_id)
             
             with self._get_connection() as conn:
