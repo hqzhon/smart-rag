@@ -38,6 +38,8 @@ class MedicalTextSplitter:
             "\n\n", 
             "。\n", 
             ".\n\n",
+            ".\n",
+            "。\n",
             "、\n", 
             "：\n", ":\n\n",
             "，\n", ",\n\n",
