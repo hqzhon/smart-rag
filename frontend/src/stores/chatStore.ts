@@ -308,14 +308,14 @@ export const useChatStore = create<ChatStore>()(
         set((state) => {
           if (!state.streamingMessage) return state;
           
-          const currentSources = state.streamingMessage.sources || [];
-          const newSources = [...currentSources, ...documents];
+          // 直接替换来源，而不是累积，因为后端发送的是完整的来源列表
+          // 这样可以避免重复来源的问题
           
           return {
             ...state,
             streamingMessage: {
               ...state.streamingMessage,
-              sources: newSources,
+              sources: documents, // 直接使用新的文档列表，不累积
             },
           };
         });

@@ -200,30 +200,67 @@ const MessageItem: React.FC<MessageItemProps> = ({ index, style, data }) => {
               <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
                 参考来源:
               </Typography>
-              {msg.sources.map((source, idx) => {
-                const sourceTitle = typeof source === 'string' 
-                  ? source 
-                  : (source as any)?.filename || source?.metadata?.filename || source?.metadata?.source || '未知文档';
-                
-                return (
-                  <AnimatedBox key={idx} animation="fadeInUp" delay={`${0.1 * idx}s`}>
-                    <HoverAnimatedBox hoverAnimation="scale">
-                      <Chip
-                        label={sourceTitle}
-                        size="small"
-                        variant="outlined"
-                        sx={{
-                          fontSize: '0.75rem',
-                          height: 24,
-                          '& .MuiChip-label': {
-                            px: 1,
-                          },
-                        }}
-                      />
-                    </HoverAnimatedBox>
-                  </AnimatedBox>
-                );
-              })}
+              {(() => {
+                // 按document_id分组合并相同文档的引用，与OptimizedMessageItem保持一致
+                const groupedSources = msg.sources.reduce((groups: any, source: any) => {
+                  const documentId = source.metadata?.document_id || 'unknown';
+                  const sourceTitle = (source as any).filename || 
+                                     source.metadata?.filename || 
+                                     source.metadata?.source || 
+                                     '未知文档';
+                  const pageNumber = source.metadata?.page_number;
+                  
+                  if (!groups[documentId]) {
+                    groups[documentId] = {
+                      title: sourceTitle,
+                      sources: [],
+                      pageNumbers: new Set()
+                    };
+                  }
+                  
+                  groups[documentId].sources.push(source);
+                  if (pageNumber) {
+                    groups[documentId].pageNumbers.add(pageNumber);
+                  }
+                  
+                  return groups;
+                }, {});
+
+                return Object.entries(groupedSources).map(([documentId, group]: [string, any], idx) => {
+                  // 构建显示标签，包含页码范围信息
+                  const pageArray = Array.from(group.pageNumbers).sort((a: any, b: any) => a - b);
+                  let displayLabel = group.title;
+                  
+                  if (pageArray.length > 0) {
+                    if (pageArray.length === 1) {
+                      displayLabel += ` (第${pageArray[0]}页)`;
+                    } else if (pageArray.length <= 3) {
+                      displayLabel += ` (第${pageArray.join('、')}页)`;
+                    } else {
+                      displayLabel += ` (第${pageArray[0]}-${pageArray[pageArray.length - 1]}页等${pageArray.length}页)`;
+                    }
+                  }
+                  
+                  return (
+                    <AnimatedBox key={documentId} animation="fadeInUp" delay={`${0.1 * idx}s`}>
+                      <HoverAnimatedBox hoverAnimation="scale">
+                        <Chip
+                          label={displayLabel}
+                          size="small"
+                          variant="outlined"
+                          sx={{
+                            fontSize: '0.75rem',
+                            height: 24,
+                            '& .MuiChip-label': {
+                              px: 1,
+                            },
+                          }}
+                        />
+                      </HoverAnimatedBox>
+                    </AnimatedBox>
+                  );
+                });
+              })()}
             </Box>
           </AnimatedBox>
         )}

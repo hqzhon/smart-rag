@@ -279,9 +279,7 @@ class EnhancedRAGWorkflow:
             if not retrieved_docs:
                 no_result_msg = "抱歉，我没有找到相关的医疗信息。"
                 yield {"type": "result", "response": no_result_msg}
-                # 保存无结果的聊天记录
-                if session_id:
-                    await self._save_chat_history(session_id, query, no_result_msg, [])
+                # 注意：无结果的聊天记录保存也由调用方（chat_service）负责
                 return
             
             yield {"type": "status", "message": "正在使用增强AI重排序..."}
@@ -302,13 +300,31 @@ class EnhancedRAGWorkflow:
                 yield {"type": "chunk", "content": chunk}
             
             # 构建引用文档，使用原始文件名和页码信息
-            for doc in filtered_docs[:3]:
+            # 按document_id去重，避免同一个文档的多个片段被重复显示
+            seen_document_ids = set()
+            
+            for doc in filtered_docs:
                 # 过滤掉 None 值
                 if doc is None:
                     logger.warning("Skipping None document in reference docs construction")
                     continue
                     
                 metadata = doc.get('metadata', {})
+                document_id = metadata.get('document_id', '')
+                
+                # 如果这个文档ID已经处理过，跳过
+                if document_id and document_id in seen_document_ids:
+                    logger.debug(f"Skipping duplicate document_id: {document_id}")
+                    continue
+                
+                # 记录已处理的文档ID
+                if document_id:
+                    seen_document_ids.add(document_id)
+                
+                # 如果已经有了3个不同的文档，停止处理
+                if len(reference_docs) >= 3:
+                    break
+                    
                 # 获取文档名称，优先从向量存储的metadata中获取已有的正确信息
                 doc_name = None
                 
@@ -371,13 +387,8 @@ class EnhancedRAGWorkflow:
             
             yield {"type": "documents", "documents": reference_docs}
             
-            # 保存聊天记录到数据库
-            if session_id and full_response:
-                try:
-                    await self._save_chat_history(session_id, query, full_response, reference_docs)
-                    logger.info(f"聊天记录已保存，会话ID: {session_id}")
-                except Exception as save_error:
-                    logger.error(f"保存聊天记录失败: {str(save_error)}", exc_info=True)
+            # 注意：聊天记录的保存由调用方（chat_service）负责，此处不再重复保存
+            # 避免同一条聊天记录被保存多次导致来源信息重复
             
             yield {"type": "status", "message": "回答生成完成"}
             
@@ -398,32 +409,3 @@ class EnhancedRAGWorkflow:
             logger.error(f"流式生成Deepseek回答失败: {str(e)}", exc_info=True)
             yield "抱歉，生成回答时出现错误。"
     
-    async def _save_chat_history(self, session_id: str, query: str, response: str, reference_docs: List[Dict[str, Any]]):
-        """保存聊天记录到数据库"""
-        try:
-            from app.storage.database import get_db_manager
-            db_manager = get_db_manager()
-            
-            # 构建引用文档的JSON数据
-            sources = []
-            for doc in reference_docs:
-                sources.append({
-                    'filename': doc['metadata'].get('filename', ''),
-                    'content': doc['content'][:500],  # 限制内容长度
-                    'page_number': doc['metadata'].get('page_number'),
-                    'document_id': doc['metadata'].get('document_id', '')
-                })
-            
-            # 保存聊天记录
-            chat_data = {
-                'session_id': session_id,
-                'question': query,
-                'answer': response,
-                'sources': sources,
-                'metadata': {}
-            }
-            db_manager.save_chat_history(chat_data)
-            
-        except Exception as e:
-            logger.error(f"保存聊天记录时出错: {str(e)}", exc_info=True)
-            raise e
