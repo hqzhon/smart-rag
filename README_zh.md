@@ -1,13 +1,15 @@
 # Smart RAG - 医学文献智能检索问答系统
 
-🚀 **基于先进RAG技术的医学文献智能检索问答系统**
-
-一个集成了混合检索、RRF结果融合和多模型支持的智能文档问答平台，专为医学文献处理和知识检索而设计。
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
+
+[中文版](README_zh.md) | [English Version](README.md)
+
+🚀 **基于先进RAG技术的医学文献智能检索问答系统**
+
+一个集成了混合检索、RRF结果融合和多模型支持的智能文档问答平台，专为医学文献处理和知识检索而设计。
 
 ## ✨ 核心亮点
 

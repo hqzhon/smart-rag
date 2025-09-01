@@ -1,15 +1,15 @@
 # Smart RAG - Intelligent Medical Literature Retrieval and Q&A System
 
-[中文版 README](README_zh.md)
-
-🚀 **An intelligent medical literature Q&A system based on advanced RAG technology**
-
-An intelligent document Q&A platform that integrates hybrid retrieval, RRF result fusion, and multi-model support, specifically designed for medical literature processing and knowledge retrieval.
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
+
+[中文版](README_zh.md) | [English Version](README.md)
+
+🚀 **An intelligent medical literature Q&A system based on advanced RAG technology**
+
+An intelligent document Q&A platform that integrates hybrid retrieval, RRF result fusion, and multi-model support, specifically designed for medical literature processing and knowledge retrieval.
 
 ## ✨ Core Features
 
@@ -89,7 +89,7 @@ To help you understand the internal workings of our system, we provide a series 
 - **[Usage Guide](docs_en/usage.md)** - Detailed instructions on how to use the web interface and API.
 - **[Installation and Configuration Guide](docs_en/installation.md)** - Detailed environment setup and installation steps.
 - **[API Reference](docs_en/api.md)** - Complete API documentation and usage examples.
-- **[System Architecture (Legacy)](docs_en/architecture.md)** - The original technical architecture, component design, and development guide.
+- **[System Architecture](docs_en/architecture.md)** - The original technical architecture, component design, and development guide.
 
 
 ---

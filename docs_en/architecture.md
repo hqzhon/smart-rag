@@ -19,9 +19,9 @@ This workflow is responsible for processing raw documents uploaded by the user i
 ```mermaid
 flowchart TD
     A[User Uploads PDF] --> B{EnhancedPDFProcessor};
-    B --> C[Parse & Extract Content<br>(Text, Tables, etc.)];
+    B --> C[Parse & Extract Content<br>Text, Tables, etc.];
     C --> D{MedicalTextSplitter};
-    D --> E[Dual-Mode Smart Chunking<br>(Semantic/Recursive)];
+    D --> E[Dual-Mode Smart Chunking<br>Semantic/Recursive];
     E --> F[Generate Document Chunks];
     F --> G{Metadata Generation Module};
     G --> H[Extract Keywords];
