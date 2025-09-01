@@ -20,6 +20,11 @@ from datetime import datetime
 logger = setup_logger(__name__)
 
 
+class ProcessingError(Exception):
+    """文档处理异常"""
+    pass
+
+
 class DocumentProcessor:
     """处理文档集合的类"""
     
@@ -70,7 +75,7 @@ class DocumentProcessor:
             logger.info("vector_store初始化完成")
         return self.vector_store
         
-    async def process_single_document(self, file_path: str, document_id: str = None) -> Dict[str, Any]:
+    async def process_single_document(self, file_path: str, document_id: Optional[str] = None) -> Dict[str, Any]:
         """处理单个文档
         
         Args:
@@ -113,6 +118,38 @@ class DocumentProcessor:
                     raw_text = result.get("text", "")
                     structured_text = raw_text
                     metadata = {}
+                    
+            elif file_extension in ['.docx', '.pptx', '.xlsx', '.md']:
+                # 处理现代Office格式和Markdown文档
+                logger.info(f"使用unstructured处理格式: {file_extension}")
+                try:
+                    structured_elements = self._process_with_unstructured(file_path, file_extension)
+                    
+                    # 提取文本内容
+                    raw_text = "\n".join([
+                        element.text for element in structured_elements 
+                        if hasattr(element, 'text') and element.text and element.text.strip()
+                    ])
+                    
+                    # 提取元数据
+                    metadata = self._extract_unstructured_metadata(structured_elements, file_extension)
+                    
+                    # 添加结构化标记
+                    structured_text = self._add_structure_markers_from_unstructured(structured_elements)
+                    
+                except Exception as unstructured_error:
+                    logger.warning(f"Unstructured处理失败: {unstructured_error}，尝试基础文本提取")
+                    
+                    # 回退到基础文本提取
+                    raw_text = self._fallback_text_extraction(file_path, file_extension)
+                    structured_text = raw_text
+                    metadata = {
+                        "file_type": file_extension.lstrip('.'),
+                        "file_name": os.path.basename(file_path),
+                        "processing_method": "fallback_text_extraction",
+                        "warning": f"Unstructured处理失败: {str(unstructured_error)}"
+                    }
+                    
             else:
                 raise ValueError(f"Unsupported file type: {file_extension}")
             
@@ -123,15 +160,28 @@ class DocumentProcessor:
                 cleaned_text = self.text_cleaner.clean_comprehensive(raw_text)
                 
                 # Extract structured content if available
-                if structured_elements:
-                    # Convert structured elements to text for analysis
-                    structured_text_for_analysis = "\n".join([
-                        element.get("content", "") for element in structured_elements 
-                        if element.get("content")
-                    ])
-                    if structured_text_for_analysis:
-                        structured_content = self.text_cleaner.extract_structured_content(structured_text_for_analysis)
-                        metadata.update(structured_content)
+                if 'structured_elements' in locals() and structured_elements:
+                    # Check if elements are from unstructured (have .text attribute) or other formats (dict-like)
+                    if hasattr(structured_elements[0], 'text'):
+                        # Handle unstructured elements (already processed above)
+                        pass
+                    else:
+                        # Handle other structured elements (dict-like)
+                        structured_text_for_analysis = "\n".join([
+                            str(element.get("content", "")) for element in structured_elements 
+                            if isinstance(element, dict) and element.get("content")
+                        ])
+                        if structured_text_for_analysis:
+                            try:
+                                structured_content = self.text_cleaner.extract_structured_content(structured_text_for_analysis)
+                                # Safely merge structured content
+                                for key, value in structured_content.items():
+                                    if isinstance(value, (str, int, float, bool)):
+                                        metadata[key] = str(value)  # Convert all to string for consistency
+                                    elif isinstance(value, (list, dict)):
+                                        metadata[key] = str(value)  # Convert complex types to string
+                            except Exception as e:
+                                logger.warning(f"Failed to extract structured content: {e}")
             
             # Step 3: Medical terminology standardization
             standardized_text = cleaned_text
@@ -140,7 +190,10 @@ class DocumentProcessor:
                 
                 # Extract medical entities
                 entities = self.terminology_standardizer.extract_medical_entities(standardized_text)
-                metadata["medical_entities"] = entities
+                if isinstance(entities, (list, dict)):
+                    metadata["medical_entities"] = str(entities)  # Convert to string for storage
+                else:
+                    metadata["medical_entities"] = entities
             
             # Step 4: Enhanced metadata
             enhanced_metadata = self._enhance_metadata(metadata, file_path)
@@ -277,8 +330,186 @@ class DocumentProcessor:
             logger.error(f"Error processing document {file_path}: {str(e)}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
+    
+    def _process_with_unstructured(self, file_path: str, file_extension: str):
+        """使用unstructured处理多格式文档
         
-    def _add_structure_markers(self, structured_elements: List[Dict[str, Any]]) -> str:
+        Args:
+            file_path: 文件路径
+            file_extension: 文件扩展名
+            
+        Returns:
+            unstructured元素列表
+        """
+        try:
+            if file_extension == '.docx':
+                from unstructured.partition.docx import partition_docx
+                elements = partition_docx(
+                    filename=file_path, 
+                    infer_table_structure=True,
+                    include_page_breaks=True
+                )
+            elif file_extension == '.pptx':
+                from unstructured.partition.pptx import partition_pptx
+                elements = partition_pptx(
+                    filename=file_path, 
+                    infer_table_structure=True
+                )
+            elif file_extension == '.xlsx':
+                from unstructured.partition.xlsx import partition_xlsx
+                elements = partition_xlsx(
+                    filename=file_path, 
+                    infer_table_structure=True
+                )
+            elif file_extension == '.md':
+                from unstructured.partition.md import partition_md
+                elements = partition_md(filename=file_path)
+            else:
+                raise ValueError(f"Unstructured不支持的格式: {file_extension}")
+                
+            logger.info(f"Unstructured处理成功: {file_path}, 提取{len(elements)}个元素")
+            return elements
+            
+        except Exception as e:
+            logger.error(f"Unstructured处理失败: {e}")
+            raise ProcessingError(f"文档解析失败: {e}")
+    
+    def _extract_unstructured_metadata(self, elements, file_extension: str) -> Dict[str, Any]:
+        """从unstructured元素中提取元数据
+        
+        Args:
+            elements: unstructured元素列表
+            file_extension: 文件扩展名
+            
+        Returns:
+            元数据字典
+        """
+        metadata = {
+            "file_type": file_extension.lstrip('.'),
+            "file_name": "",  # 将在后续填充
+            "total_elements": len(elements),
+            "element_types": list(set(type(e).__name__ for e in elements)),
+            "processing_method": "unstructured"
+        }
+        
+        # 提取页面/幻灯片/工作表信息
+        page_numbers = set()
+        sheet_names = set()
+        slide_numbers = set()
+        
+        for element in elements:
+            if hasattr(element, 'metadata') and element.metadata:
+                element_metadata = element.metadata
+                
+                # 处理不同类型的元数据
+                if isinstance(element_metadata, dict):
+                    meta_dict = element_metadata
+                else:
+                    meta_dict = element_metadata.__dict__ if hasattr(element_metadata, '__dict__') else {}
+                
+                # 提取页面信息
+                if 'page_number' in meta_dict and meta_dict['page_number'] is not None:
+                    page_numbers.add(meta_dict['page_number'])
+                    
+                # 提取幻灯片信息
+                if 'slide_number' in meta_dict and meta_dict['slide_number'] is not None:
+                    slide_numbers.add(meta_dict['slide_number'])
+                    
+                # 提取工作表信息
+                if 'sheet_name' in meta_dict and meta_dict['sheet_name'] is not None:
+                    sheet_names.add(meta_dict['sheet_name'])
+        
+        # 设置总数
+        if page_numbers:
+            metadata["total_pages"] = len(page_numbers)
+            metadata["page_range"] = f"{min(page_numbers)}-{max(page_numbers)}"
+        
+        if slide_numbers:
+            metadata["total_slides"] = len(slide_numbers)
+            
+        if sheet_names:
+            metadata["total_sheets"] = len(sheet_names)
+            metadata["sheet_names"] = list(sheet_names)
+            
+        # 统计元素类型
+        element_type_counts = {}
+        for element in elements:
+            element_type = type(element).__name__
+            element_type_counts[element_type] = element_type_counts.get(element_type, 0) + 1
+            
+        metadata["element_type_counts"] = element_type_counts
+        
+        return metadata
+    
+    def _add_structure_markers_from_unstructured(self, elements) -> str:
+        """从unstructured元素添加结构化标记
+        
+        Args:
+            elements: unstructured元素列表
+            
+        Returns:
+            带结构标记的文本
+        """
+        structured_parts = []
+        
+        for element in elements:
+            if not hasattr(element, 'text') or not element.text or not element.text.strip():
+                continue
+                
+            element_type = type(element).__name__.lower()
+            text_content = element.text.strip()
+            
+            # 根据元素类型添加结构标记
+            if 'title' in element_type or 'header' in element_type:
+                structured_parts.append(f"\n##TITLE_START_\n{text_content}\n##TITLE_END_\n")
+            elif 'table' in element_type:
+                structured_parts.append(f"\n##TABLE_START_\n{text_content}\n##TABLE_END_\n")
+            elif 'list' in element_type:
+                structured_parts.append(f"\n##LIST_START_\n{text_content}\n##LIST_END_\n")
+            else:
+                structured_parts.append(f"\n##SECTION_START_\n{text_content}\n##SECTION_END_\n")
+        
+        return "\n".join(structured_parts)
+    
+    def _fallback_text_extraction(self, file_path: str, file_extension: str) -> str:
+        """回退文本提取方法
+        
+        Args:
+            file_path: 文件路径
+            file_extension: 文件扩展名
+            
+        Returns:
+            提取的文本内容
+        """
+        try:
+            if file_extension == '.docx':
+                # 使用python-docx读取
+                try:
+                    from docx import Document
+                    doc = Document(file_path)
+                    text_parts = []
+                    for paragraph in doc.paragraphs:
+                        if paragraph.text.strip():
+                            text_parts.append(paragraph.text.strip())
+                    return "\n\n".join(text_parts)
+                except ImportError:
+                    logger.warning("python-docx未安装，无法处理docx文件")
+                    return "[文档内容无法读取: 缺少python-docx依赖]"
+                    
+            elif file_extension == '.md':
+                # 直接读取markdown文件
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+                    
+            else:
+                # 其他格式返回错误信息
+                return f"[文档内容无法读取: 不支持{file_extension}格式的回退处理]"
+                
+        except Exception as e:
+            logger.error(f"回退文本提取失败: {e}")
+            return f"[文档内容读取错误: {str(e)}]"
+        
+    def _add_structure_markers(self, structured_elements) -> str:
         """为结构化元素添加标记
         
         Args:
@@ -290,8 +521,15 @@ class DocumentProcessor:
         marked_text = []
         
         for element in structured_elements:
-            element_type = element.get("type", "text")
-            content = element.get("content", "")
+            # Check if element is from unstructured (has .text attribute) or dict-like
+            if hasattr(element, 'text'):
+                # Handle unstructured elements
+                element_type = type(element).__name__.lower()
+                content = getattr(element, 'text', '')
+            else:
+                # Handle dict-like elements
+                element_type = element.get("type", "text") if isinstance(element, dict) else "text"
+                content = element.get("content", "") if isinstance(element, dict) else str(element)
             
             # Debug: Check if content is a list
             if isinstance(content, list):
@@ -304,15 +542,15 @@ class DocumentProcessor:
                 continue
                 
             # Add structure markers based on element type
-            if element_type == "title":
+            if element_type in ["title", "heading"]:
                 marked_text.append(f"<TITLE>{text}</TITLE>")
-            elif element_type == "header":
+            elif element_type in ["header", "narrativetext"]:
                 marked_text.append(f"<HEADER>{text}</HEADER>")
             elif element_type == "section":
                 marked_text.append(f"<SECTION>{text}</SECTION>")
-            elif element_type == "table":
+            elif element_type in ["table", "tabular"]:
                 marked_text.append(f"<TABLE>{text}</TABLE>")
-            elif element_type == "list":
+            elif element_type in ["list", "listitem"]:
                 marked_text.append(f"<LIST>{text}</LIST>")
             elif element_type == "figure_caption":
                 marked_text.append(f"<FIGURE_CAPTION>{text}</FIGURE_CAPTION>")

@@ -199,8 +199,8 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
             {
               extension: '.txt',
               format_name: 'TXT',
-              description: '文本文件',
-              max_size: 10 * 1024 * 1024,
+              description: '纯文本文件',
+              max_size: 50 * 1024 * 1024,
               mime_type: 'text/plain',
               features: ['text_extraction']
             },
@@ -208,9 +208,9 @@ const DocumentUploader: React.FC<DocumentUploaderProps> = ({
               extension: '.md',
               format_name: 'Markdown',
               description: 'Markdown文档',
-              max_size: 10 * 1024 * 1024,
+              max_size: 50 * 1024 * 1024,
               mime_type: 'text/markdown',
-              features: ['text_extraction', 'structure_extraction']
+              features: ['text_extraction', 'structure_preservation']
             }
           ],
           max_file_size: 50 * 1024 * 1024,

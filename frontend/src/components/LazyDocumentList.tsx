@@ -175,8 +175,7 @@ const DocumentItem: React.FC<DocumentItemProps> = ({ document, onDelete, onView,
                   size="small"
                   aria-label="查看文档"
                   sx={{ mr: 1 }}
-                  disabled={document.type !== 'application/pdf'}
-                  tooltip={document.type !== 'application/pdf' ? '暂不支持此文档预览' : '查看文档'}
+                  tooltip="查看文档详情和分块信息"
                 >
                   <ViewIcon />
                 </AccessibleIconButton>

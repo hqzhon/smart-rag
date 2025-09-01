@@ -21,6 +21,7 @@ import {
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
   Refresh as RefreshIcon,
+  Description as DocumentIcon,
 } from '@mui/icons-material';
 import { Document, Page, pdfjs } from 'react-pdf';
 
@@ -29,6 +30,32 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url
 ).toString();
+
+// 文件类型标签获取函数
+const getFileTypeLabel = (mimeType: string): string => {
+  const typeMap: Record<string, string> = {
+    'application/pdf': 'PDF文档',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word文档',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint演示',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel表格',
+    'text/plain': '文本文件',
+    'text/markdown': 'Markdown文档',
+    'application/msword': 'Word文档 (97-2003)',
+    'application/vnd.ms-powerpoint': 'PowerPoint演示 (97-2003)',
+    'application/vnd.ms-excel': 'Excel表格 (97-2003)',
+  };
+  
+  return typeMap[mimeType] || '未知格式';
+};
+
+// 文件大小格式化函数
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
 interface DocumentChunk {
   chunk_id: number;
@@ -76,8 +103,10 @@ const DocumentPreviewPage: React.FC = () => {
   
   // 文档信息
   const [documentInfo, setDocumentInfo] = useState<any>(null);
+  const [documentType, setDocumentType] = useState<string>('');
+  const [isPdfFile, setIsPdfFile] = useState<boolean>(false);
 
-  // 设置PDF URL
+  // 设置PDF URL和判断文件类型
   useEffect(() => {
     if (documentId) {
       setPdfUrl(`/api/v1/documents/${documentId}/raw`);
@@ -85,6 +114,15 @@ const DocumentPreviewPage: React.FC = () => {
       setPdfUrl('');
     }
   }, [documentId]);
+
+  // 根据文档信息判断文件类型
+  useEffect(() => {
+    if (documentInfo) {
+      const fileType = documentInfo.content_type || documentInfo.type || '';
+      setDocumentType(fileType);
+      setIsPdfFile(fileType === 'application/pdf');
+    }
+  }, [documentInfo]);
 
   // 页面加载时获取数据
   useEffect(() => {
@@ -242,7 +280,7 @@ const DocumentPreviewPage: React.FC = () => {
 
       {/* 主要内容区域 */}
       <Box sx={{ display: 'flex', gap: 3, height: 'calc(100vh - 200px)' }}>
-        {/* PDF预览区域 */}
+        {/* 文档预览区域 */}
         <Paper 
           sx={{ 
             flex: 2, 
@@ -252,7 +290,7 @@ const DocumentPreviewPage: React.FC = () => {
             overflow: 'hidden'
           }}
         >
-          {/* PDF控制栏 */}
+          {/* 文档信息头部 */}
           <Box sx={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -262,22 +300,40 @@ const DocumentPreviewPage: React.FC = () => {
             borderBottom: 1,
             borderColor: 'divider'
           }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IconButton onClick={handleZoomOut} size="small">
-                <ZoomOutIcon />
-              </IconButton>
-              <Typography variant="body2">
-                {Math.round(scale * 100)}%
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {isPdfFile ? 'PDF预览' : '文档预览'}
               </Typography>
-              <IconButton onClick={handleZoomIn} size="small">
-                <ZoomInIcon />
-              </IconButton>
+              {documentInfo && (
+                <Chip 
+                  label={getFileTypeLabel(documentType)} 
+                  size="small"
+                  color={isPdfFile ? 'success' : 'warning'}
+                  variant="outlined"
+                />
+              )}
             </Box>
             
-            {numPages > 0 && (
-              <Typography variant="body2">
-                第 {currentPage} 页，共 {numPages} 页
-              </Typography>
+            {isPdfFile && (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <IconButton onClick={handleZoomOut} size="small">
+                    <ZoomOutIcon />
+                  </IconButton>
+                  <Typography variant="body2">
+                    {Math.round(scale * 100)}%
+                  </Typography>
+                  <IconButton onClick={handleZoomIn} size="small">
+                    <ZoomInIcon />
+                  </IconButton>
+                </Box>
+                
+                {numPages > 0 && (
+                  <Typography variant="body2">
+                    第 {currentPage} 页，共 {numPages} 页
+                  </Typography>
+                )}
+              </>
             )}
             
             <IconButton onClick={() => window.location.reload()} size="small">
@@ -285,7 +341,7 @@ const DocumentPreviewPage: React.FC = () => {
             </IconButton>
           </Box>
 
-          {/* PDF内容区域 */}
+          {/* 文档内容区域 */}
           <Box sx={{ 
             flex: 1, 
             overflow: 'auto', 
@@ -295,50 +351,115 @@ const DocumentPreviewPage: React.FC = () => {
             bgcolor: '#f5f5f5',
             p: 2
           }}>
-            {pdfError ? (
-              <Alert severity="error" sx={{ maxWidth: 400 }}>
-                {pdfError}
-              </Alert>
-            ) : pdfUrl ? (
-              <Document
-                file={pdfUrl}
-                onLoadSuccess={onDocumentLoadSuccess}
-                onLoadError={onDocumentLoadError}
-                onLoadStart={onDocumentLoadStart}
-                loading={(
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                    <CircularProgress />
-                    <Typography>加载PDF中...</Typography>
-                  </Box>
-                )}
-                error={(
-                  <Alert severity="error">
-                    PDF加载失败，请检查文档是否存在
-                  </Alert>
-                )}
-              >
-                <Page 
-                  pageNumber={currentPage} 
-                  scale={scale}
-                  renderTextLayer={false}
-                  renderAnnotationLayer={false}
+            {isPdfFile ? (
+              // PDF 预览
+              pdfError ? (
+                <Alert severity="error" sx={{ maxWidth: 400 }}>
+                  {pdfError}
+                </Alert>
+              ) : pdfUrl ? (
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  onLoadError={onDocumentLoadError}
+                  onLoadStart={onDocumentLoadStart}
                   loading={(
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                      <CircularProgress size={24} />
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <CircularProgress />
+                      <Typography>加载PDF中...</Typography>
                     </Box>
                   )}
-                />
-              </Document>
+                  error={(
+                    <Alert severity="error">
+                      PDF加载失败，请检查文档是否存在
+                    </Alert>
+                  )}
+                >
+                  <Page 
+                    pageNumber={currentPage} 
+                    scale={scale}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    loading={(
+                      <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                        <CircularProgress size={24} />
+                      </Box>
+                    )}
+                  />
+                </Document>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, p: 4 }}>
+                  <CircularProgress />
+                  <Typography>准备加载PDF...</Typography>
+                </Box>
+              )
             ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, p: 4 }}>
-                <CircularProgress />
-                <Typography>准备加载PDF...</Typography>
+              // 非 PDF 文件预览提示
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                gap: 3, 
+                p: 4,
+                maxWidth: 500,
+                textAlign: 'center'
+              }}>
+                <Box sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  bgcolor: 'warning.light',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mb: 1
+                }}>
+                  <DocumentIcon sx={{ fontSize: 40, color: 'warning.main' }} />
+                </Box>
+                
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                  暂不支持预览
+                </Typography>
+                
+                <Typography variant="body1" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                  {getFileTypeLabel(documentType)} 格式暂时不支持在线预览，
+                  但您可以查看右侧的文档分块信息。
+                </Typography>
+                
+                {documentInfo && (
+                  <Paper sx={{ p: 2, bgcolor: 'info.light', borderRadius: 2, width: '100%' }}>
+                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                      文档信息
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="body2">
+                        <strong>文件名：</strong>{documentInfo.title || documentInfo.name || '未知'}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>文件类型：</strong>{getFileTypeLabel(documentType)}
+                      </Typography>
+                      {documentInfo.size && (
+                        <Typography variant="body2">
+                          <strong>文件大小：</strong>{formatFileSize(documentInfo.size)}
+                        </Typography>
+                      )}
+                      <Typography variant="body2">
+                        <strong>分块数量：</strong>{totalChunks} 个
+                      </Typography>
+                    </Box>
+                  </Paper>
+                )}
+                
+                <Alert severity="info" sx={{ width: '100%' }}>
+                  提示：请查看右侧的分块信息来了解文档内容
+                </Alert>
               </Box>
             )}
           </Box>
 
           {/* PDF分页控制 */}
-          {numPages > 1 && (
+          {isPdfFile && numPages > 1 && (
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
               <Pagination
                 count={numPages}
