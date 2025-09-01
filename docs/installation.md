@@ -46,9 +46,6 @@ venv\Scripts\activate     # Windows
 ```bash
 # 安装完整依赖
 pip install -r requirements.txt
-
-# 或安装基础依赖
-pip install -r requirements-simple.txt
 ```
 
 ### 4. 安装前端依赖

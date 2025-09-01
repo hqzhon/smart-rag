@@ -1,65 +1,67 @@
-# Smart RAG - 医学文献智能检索问答系统
+# Smart RAG - Intelligent Medical Literature Retrieval and Q&A System
 
-🚀 **基于先进RAG技术的医学文献智能检索问答系统**
+[中文版 README](README_zh.md)
 
-一个集成了混合检索、RRF结果融合和多模型支持的智能文档问答平台，专为医学文献处理和知识检索而设计。
+🚀 **An intelligent medical literature Q&A system based on advanced RAG technology**
+
+An intelligent document Q&A platform that integrates hybrid retrieval, RRF result fusion, and multi-model support, specifically designed for medical literature processing and knowledge retrieval.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
 
-## ✨ 核心亮点
+## ✨ Core Features
 
-- **🚀 先进RAG架构**: 采用业界领先的检索增强生成（RAG）技术，确保答案的准确性、相关性和可追溯性。
-- **🧠 智能文档处理**:
-  - **多模态解析**: 不仅提取文本，还能理解PDF中的表格、图片等复杂结构。
-  - **双模智能分块**: 优先使用`HybridTextSplitter`进行语义分块，并保留稳定的“递归”分块作为后备，保证上下文的完整性。
-- **🎯 四路混合检索**:
-  - **多维度召回**: 并行执行`VECTOR`（向量语义）、`CONTENT`（全文关键词）、`SUMMARY`（摘要关键词）和`KEYWORDS`（关键词列表）四路检索，召回率和精确率最大化。
-  - **RRF融合**: 采用倒数排名融合（RRF）算法，智能合并多路结果。
-- **🔍 AI增强与优化**:
-  - **查询转换**: 利用LLM对用户问题进行重写和扩展，更好地匹配知识库。
-  - **AI重排序**: 在检索后，通过更强大的AI模型进行二次“精读”和重排序，确保最终答案基于最相关的精华内容生成。
-- **💬 企业级问答体验**:
-  - **流式输出**: 答案实时响应，提升用户交互体验。
-  - **精准溯源**: 所有答案都提供清晰的文献来源，方便核实。
-  - **高可扩展性**: 异步化、模块化的设计，易于集成新模型、新功能。
+- **🚀 Advanced RAG Architecture**: Adopts industry-leading Retrieval-Augmented Generation (RAG) technology to ensure the accuracy, relevance, and traceability of answers.
+- **🧠 Intelligent Document Processing**:
+  - **Multi-modal Parsing**: Not only extracts text but also understands complex structures like tables and images in PDFs.
+  - **Dual-mode Smart Chunking**: Prioritizes semantic chunking using `HybridTextSplitter` and maintains stable "recursive" chunking as a fallback to ensure context integrity.
+- **🎯 4-Path Hybrid Retrieval**:
+  - **Multi-dimensional Recall**: Simultaneously performs four retrieval paths—`VECTOR` (semantic), `CONTENT` (full-text keyword), `SUMMARY` (summary keyword), and `KEYWORDS` (keyword list)—to maximize recall and precision.
+  - **RRF Fusion**: Uses the Reciprocal Rank Fusion (RRF) algorithm to intelligently merge results from multiple paths.
+- **🔍 AI Enhancement & Optimization**:
+  - **Query Transformation**: Utilizes LLMs to rewrite and expand user queries for better matching with the knowledge base.
+  - **AI Reranking**: After retrieval, a more powerful AI model performs a second-pass "close reading" and reranking to ensure the final answer is based on the most relevant, high-quality content.
+- **💬 Enterprise-grade Q&A Experience**:
+  - **Streaming Output**: Real-time streaming of answers to enhance user interaction.
+  - **Precise Source Tracing**: All answers provide clear literature sources for easy verification.
+  - **High Scalability**: Asynchronous and modular design makes it easy to integrate new models and features.
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 1. 环境要求
+### 1. Prerequisites
 
 - Python 3.9+
 - Node.js 16+
-- 16GB+ 内存推荐
-- 100GB+ 可用存储空间
+- 16GB+ RAM recommended
+- 100GB+ available storage space
 
-### 2. 安装依赖
+### 2. Install Dependencies
 
 ```bash
-# 安装基础依赖
+# Install base dependencies
 pip install -r requirements.txt
 ```
 
-### 3. 配置环境变量
+### 3. Configure Environment Variables
 
-复制并编辑环境变量文件：
+Copy and edit the environment variables file:
 ```bash
 cp .env.example .env
-# 编辑 .env 文件，配置必要的参数
+# Edit the .env file to configure necessary parameters
 ```
 
-### 4. 启动后端服务
+### 4. Start the Backend Service
 
 ```bash
 python run.py
-python start_celery_worker.py  // 队列
+python start_celery_worker.py  // For the queue
 ```
 
-后端API将在 http://localhost:8001 启动
+The backend API will start at http://localhost:8001
 
-### 5. 启动前端服务
+### 5. Start the Frontend Service
 
 ```bash
 cd frontend
@@ -67,62 +69,64 @@ npm install
 npm run dev
 ```
 
-前端界面将在 http://localhost:3001 启动
+The frontend interface will start at http://localhost:3001
 
-## 📚 详细文档
+## 📚 Detailed Documentation
 
-### RAG架构深度解析
+### In-depth RAG Architecture Analysis
 
-为了帮助您深入理解本系统的内部工作原理，我们提供了一系列详细的组件解析文档：
+To help you understand the internal workings of our system, we provide a series of detailed component analysis documents:
 
-- **[RAG系统架构概览](docs/RAG_architecture_overview.md)** - **建议首先阅读**，高层次地了解系统全貌。
-  - **[组件详解一：智能文档处理](docs/rag_components/1_document_processing.md)**
-  - **[组件详解二：查询转换与优化](docs/rag_components/2_query_transformation.md)**
-  - **[组件详解三：四路召回与融合检索](docs/rag_components/3_retrieval.md)**
-  - **[组件详解四：AI增强重排序](docs/rag_components/4_reranking.md)**
-  - **[组件详解五：上下文构建与答案生成](docs/rag_components/5_response_generation.md)**
+- **[RAG System Architecture Overview](docs_en/RAG_architecture_overview.md)** - **Recommended to read first** for a high-level overview of the system.
+  - **[Component Deep Dive 1: Intelligent Document Processing](docs_en/rag_components/1_document_processing.md)**
+  - **[Component Deep Dive 2: Query Transformation and Optimization](docs_en/rag_components/2_query_transformation.md)**
+  - **[Component Deep Dive 3: 4-Path Recall and Fusion Retrieval](docs_en/rag_components/3_retrieval.md)**
+  - **[Component Deep Dive 4: AI-Enhanced Reranking](docs_en/rag_components/4_reranking.md)**
+  - **[Component Deep Dive 5: Context Construction and Answer Generation](docs_en/rag_components/5_response_generation.md)**
 
-### 其他文档
+### Other Documents
 
-- **[安装与配置指南](docs/installation.md)** - 详细的环境配置和安装步骤。
-- **[API接口文档](docs/api.md)** - 完整的API接口文档和使用示例。
-- **[系统架构](docs/architecture.md)** - 原始的技术架构、组件设计和开发指南。
+- **[Usage Guide](docs_en/usage.md)** - Detailed instructions on how to use the web interface and API.
+- **[Installation and Configuration Guide](docs_en/installation.md)** - Detailed environment setup and installation steps.
+- **[API Reference](docs_en/api.md)** - Complete API documentation and usage examples.
+- **[System Architecture (Legacy)](docs_en/architecture.md)** - The original technical architecture, component design, and development guide.
 
 
 ---
 
-## 🏗️ 项目结构
+## 🏗️ Project Structure
 
 ```
 smart-rag/
-├── app/                    # 应用后端代码 (FastAPI)
-│   ├── api/                # API接口路由
-│   ├── core/               # 核心功能 (配置, Session管理等)
-│   ├── embeddings/         # 嵌入与文本分块模块
-│   ├── metadata/           # 摘要、关键词等元数据生成模块
-│   ├── models/             # Pydantic数据模型
-│   ├── processors/         # 文档解析与处理
-│   ├── retrieval/          # 核心检索模块 (四路召回, 融合, 重排)
-│   ├── services/           # 业务服务层
-│   ├── storage/            # 数据库与向量存储
-│   ├── tests/              # 测试代码
-│   ├── utils/              # 工具函数
-│   └── workflow/           # RAG工作流与LLM客户端
-├── data/                   # 数据目录 (向量数据库, 上传文件等)
-├── docs/                   # 项目文档
-│   ├── rag_components/     # RAG核心组件深度解析文档
+├── app/                    # Application backend code (FastAPI)
+│   ├── api/                # API routes
+│   ├── core/               # Core functionalities (Config, Session Mgmt, etc.)
+│   ├── embeddings/         # Embeddings and text chunking module
+│   ├── metadata/           # Metadata generation module (summaries, keywords)
+│   ├── models/             # Pydantic data models
+│   ├── processors/         # Document parsing and processing
+│   ├── retrieval/          # Core retrieval module (4-path recall, fusion, reranking)
+│   ├── services/           # Business logic services
+│   ├── storage/            # Database and vector store
+│   ├── tests/              # Test code
+│   ├── utils/              # Utility functions
+│   └── workflow/           # RAG workflow and LLM clients
+├── data/                   # Data directory (vector DB, uploads, etc.)
+├── docs/                   # Project documentation (Chinese)
+├── docs_en/                # Project documentation (English)
+│   ├── rag_components/     # RAG core component deep dives
 │   ├── RAG_architecture_overview.md
 │   ├── ...
 │   └── ...
-├── frontend/               # 前端代码 (React)
-├── logs/                   # 日志文件
-├── scripts/                # 实用脚本
-├── .env.example            # 环境变量示例
-├── docker-compose.yml      # Docker配置
-├── requirements.txt        # Python依赖
-└── run.py                  # 后端启动脚本
+├── frontend/               # Frontend code (React)
+├── logs/                   # Log files
+├── scripts/                # Utility scripts
+├── .env.example            # Environment variable example
+├── docker-compose.yml      # Docker configuration
+├── requirements.txt        # Python dependencies
+└── run.py                  # Backend startup script
 ```
 
-## 📝 许可证
+## 📝 License
 
-本项目采用 MIT 许可证
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
