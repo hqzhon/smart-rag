@@ -38,10 +38,10 @@ class ChunkingConfig:
             self.separators = [
                 "\n##SECTION_START_",  # Section markers
                 "\n\n",              # Double newlines
-                "。\n",               # Chinese sentence end
-                ".\n\n",               # English paragraph end
-                ".\n",                # English sentence end
                 "。\n\n",              # Chinese paragraph end
+                ".\n\n",               # English paragraph end
+                "。\n",               # Chinese sentence end
+                ".\n",                # English sentence end
             ]
 
 

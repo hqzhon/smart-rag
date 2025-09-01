@@ -36,8 +36,8 @@ class MedicalTextSplitter:
         self.separators = [
             "\n##SECTION_START_",
             "\n\n", 
-            "。\n", 
             ".\n\n",
+            "。\n", 
             ".\n",
             "。\n",
             "、\n", 
