@@ -118,7 +118,9 @@ const DocumentPreviewPage: React.FC = () => {
   // 根据文档信息判断文件类型
   useEffect(() => {
     if (documentInfo) {
-      const fileType = documentInfo.content_type || documentInfo.type || '';
+      let fileType = documentInfo.file_type || documentInfo.type || '';
+      // 转成小写
+      fileType = fileType.toLowerCase();
       setDocumentType(fileType);
       setIsPdfFile(fileType === 'application/pdf');
     }
