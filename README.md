@@ -86,7 +86,7 @@ npm run dev
 
 - **[安装与配置指南](docs/installation.md)** - 详细的环境配置和安装步骤。
 - **[API接口文档](docs/api.md)** - 完整的API接口文档和使用示例。
-- **[系统架构（旧版）](docs/architecture.md)** - 原始的技术架构、组件设计和开发指南。
+- **[系统架构](docs/architecture.md)** - 原始的技术架构、组件设计和开发指南。
 
 
 ---

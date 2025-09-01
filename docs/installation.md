@@ -23,7 +23,7 @@
 ### 1. 克隆项目
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/hqzhon/smart-rag
 cd smart-rag
 ```
 
@@ -31,7 +31,7 @@ cd smart-rag
 
 ```bash
 # 使用conda
-conda create -n smart-rag python=3.9
+conda create -n smart-rag python=3.12
 conda activate smart-rag
 
 # 或使用venv
