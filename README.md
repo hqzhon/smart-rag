@@ -1,6 +1,6 @@
 # Smart RAG - Intelligent Medical Literature Retrieval and Q&A System
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
@@ -129,4 +129,18 @@ smart-rag/
 
 ## 📝 License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 with additional commercial use restrictions. See the [LICENSE](LICENSE) file for details.
+
+### Commercial Use Restrictions
+
+- ✅ **Backend Server Commercial Use**: Permitted for direct commercial purposes
+- ❌ **SaaS Service Restriction**: Not permitted without separate commercial license
+- ⚠️ **Copyright Attribution**: Required for all commercial services (unless separately licensed)
+
+For commercial licensing inquiries, please contact: **hqzhon@gmail.com**
+
+## 📧 Contact
+
+For questions, suggestions, or commercial licensing:
+- Email: **hqzhon@gmail.com**
+- Telegram: **@hqzhon**

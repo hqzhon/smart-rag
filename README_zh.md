@@ -1,6 +1,6 @@
 # Smart RAG - 医学文献智能检索问答系统
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
@@ -127,4 +127,18 @@ smart-rag/
 
 ## 📝 许可证
 
-本项目采用 MIT 许可证。详情请见 [LICENSE](LICENSE) 文件。
+本项目采用 Apache License 2.0 许可证，并附加商业使用限制条款。详情请见 [LICENSE](LICENSE) 文件。
+
+### 商业使用限制
+
+- ✅ **后台服务器商用**: 允许作为后台服务器直接商用
+- ❌ **SaaS服务限制**: 未经商业授权不允许提供SaaS服务
+- ⚠️ **版权信息保留**: 任何商业服务均需保留版权信息（除非获得单独商业授权）
+
+商业授权咨询请联系：**hqzhon@gmail.com**
+
+## 📧 联系方式
+
+如有问题、建议或商业授权需求：
+- 邮箱：**hqzhon@gmail.com**
+- 电报：**@hqzhon**
