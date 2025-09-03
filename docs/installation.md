@@ -313,17 +313,22 @@ CREATE TABLE IF NOT EXISTS documents (
     content LONGTEXT NOT NULL COMMENT '文档内容',
     file_path VARCHAR(1000) COMMENT '文件路径',
     file_size BIGINT COMMENT '文件大小(字节)',
-    file_type VARCHAR(50) COMMENT '文件类型',
-    vectorized BOOLEAN DEFAULT FALSE COMMENT '是否已向量化',
-    vectorization_status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending' COMMENT '向量化状态',
-    vectorization_time TIMESTAMP NULL COMMENT '向量化时间',
+    file_type VARCHAR(200) COMMENT '文件类型',
     metadata JSON COMMENT '元数据',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    status VARCHAR(50) DEFAULT 'uploading' COMMENT '文档状态',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    vectorized BOOLEAN DEFAULT FALSE COMMENT '是否已向量化',
+    vectorization_status VARCHAR(50) DEFAULT 'pending' COMMENT '向量化状态',
+    metadata_generation_status VARCHAR(50) DEFAULT 'pending' COMMENT '元数据生成状态',
+    processed BOOLEAN DEFAULT FALSE COMMENT '是否已处理',
+    metadata_generation_completed_at TIMESTAMP NULL COMMENT '元数据生成完成时间',
     INDEX idx_created_at (created_at),
     INDEX idx_file_type (file_type),
     INDEX idx_vectorized (vectorized),
-    INDEX idx_vectorization_status (vectorization_status)
+    INDEX idx_vectorization_status (vectorization_status),
+    INDEX idx_status (status),
+    INDEX idx_metadata_generation_status (metadata_generation_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档表';
 
 -- 会话表
@@ -372,7 +377,7 @@ CREATE TABLE IF NOT EXISTS search_history (
 
 | 表名 | 说明 | 主要字段 |
 |------|------|----------|
-| `documents` | 文档存储表 | id, title, content, file_path, vectorized, vectorization_status |
+| `documents` | 文档存储表 | id, title, content, file_path, status, vectorized, vectorization_status, metadata_generation_status, processed |
 | `sessions` | 会话管理表 | id, user_id, title, metadata, is_active |
 | `chat_history` | 聊天记录表 | id, session_id, question, answer, sources |
 | `search_history` | 搜索历史表 | id, session_id, query, results, result_count |

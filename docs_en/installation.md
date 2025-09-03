@@ -310,17 +310,22 @@ CREATE TABLE IF NOT EXISTS documents (
     content LONGTEXT NOT NULL COMMENT 'Document content',
     file_path VARCHAR(1000) COMMENT 'File path',
     file_size BIGINT COMMENT 'File size in bytes',
-    file_type VARCHAR(50) COMMENT 'File type',
-    vectorized BOOLEAN DEFAULT FALSE COMMENT 'Whether it has been vectorized',
-    vectorization_status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending' COMMENT 'Vectorization status',
-    vectorization_time TIMESTAMP NULL COMMENT 'Vectorization timestamp',
+    file_type VARCHAR(200) COMMENT 'File type',
     metadata JSON COMMENT 'Metadata',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation timestamp',
+    status VARCHAR(50) DEFAULT 'uploading' COMMENT 'Document status',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Update timestamp',
+    vectorized BOOLEAN DEFAULT FALSE COMMENT 'Whether it has been vectorized',
+    vectorization_status VARCHAR(50) DEFAULT 'pending' COMMENT 'Vectorization status',
+    metadata_generation_status VARCHAR(50) DEFAULT 'pending' COMMENT 'Metadata generation status',
+    processed BOOLEAN DEFAULT FALSE COMMENT 'Whether processed',
+    metadata_generation_completed_at TIMESTAMP NULL COMMENT 'Metadata generation completion time',
     INDEX idx_created_at (created_at),
     INDEX idx_file_type (file_type),
     INDEX idx_vectorized (vectorized),
-    INDEX idx_vectorization_status (vectorization_status)
+    INDEX idx_vectorization_status (vectorization_status),
+    INDEX idx_status (status),
+    INDEX idx_metadata_generation_status (metadata_generation_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Documents Table';
 
 -- Sessions Table
@@ -369,7 +374,7 @@ CREATE TABLE IF NOT EXISTS search_history (
 
 | Table Name       | Description              | Key Fields                                                 |
 | ---------------- | ------------------------ | ---------------------------------------------------------- |
-| `documents`      | Document storage         | id, title, content, file_path, vectorized, vectorization_status |
+| `documents`      | Document storage         | id, title, content, file_path, status, vectorized, vectorization_status, metadata_generation_status, processed |
 | `sessions`       | Session management       | id, user_id, title, metadata, is_active                    |
 | `chat_history`   | Chat message history     | id, session_id, question, answer, sources                  |
 | `search_history` | Search query history     | id, session_id, query, results, result_count               |
