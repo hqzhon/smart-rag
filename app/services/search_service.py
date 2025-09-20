@@ -8,10 +8,12 @@ from datetime import datetime
 from app.models.query_models import SearchResult, QueryAnalysis
 from app.retrieval.query_transformer import QueryTransformer
 from app.retrieval.fusion_retriever import AdvancedFusionRetriever, create_advanced_fusion_retriever
+from app.retrieval.small_to_big_switcher import SmallToBigSwitcher
 from app.storage.vector_store import VectorStore
 from app.storage.database import get_db_manager_async
 from app.embeddings.embeddings import QianwenEmbeddings
 from app.utils.logger import setup_logger
+from app.core.config import get_settings
 
 logger = setup_logger(__name__)
 
@@ -27,6 +29,8 @@ class SearchService:
         self.embeddings = None
         self.retriever = None
         self.documents_content = None
+        self.small_to_big_switcher = None
+        self.settings = get_settings()
         
         logger.info("搜索服务基础初始化完成")
     
@@ -49,6 +53,10 @@ class SearchService:
             config_name='balanced',
             enable_all_optimizations=True
         )
+        
+        self.small_to_big_switcher = SmallToBigSwitcher(self.db_manager)
+        await self.small_to_big_switcher.async_init()
+        logger.info("小-大切换器初始化完成")
         
         logger.info("搜索服务异步初始化完成")
     
@@ -117,18 +125,42 @@ class SearchService:
             
             retrieved_docs = await self.retriever.retrieve(query, top_k=limit)
             
+            # 小-大检索切换逻辑
+            if self.small_to_big_switcher is not None:
+                
+                logger.info("执行小-大检索切换")
+                switching_result = await self.small_to_big_switcher.switch_to_parent_chunks(
+                    retrieved_docs, 
+                    preserve_small_chunks=True  # 保留无法找到大块的小块
+                )
+                
+                # 使用切换后的文档
+                retrieved_docs = switching_result.switched_documents
+                
+                # 记录切换统计信息
+                stats = self.small_to_big_switcher.get_switching_stats(switching_result)
+                logger.info(
+                    f"小-大切换统计: 总处理 {stats['total_processed']} 个, "
+                    f"成功切换 {stats['parent_chunks_found']} 个, "
+                    f"成功率 {stats['switch_success_rate']:.2%}, "
+                    f"耗时 {stats['processing_time']:.3f}s"
+                )
+            
             results = []
             for doc in retrieved_docs:
                 metadata = doc.get('metadata', {})
                 score = metadata.get('score', 0.0)
                 
                 if score >= threshold:
+                    # 检查是否为切换后的文档
+                    chunk_type = "parent_chunk" if metadata.get('switched_to_parent') else "text"
+                    
                     results.append(SearchResult(
-                        content=doc.get('page_content', ''),
+                        content=doc.get('page_content', doc.get('content', '')),
                         score=score,
                         source=metadata.get('source', 'unknown'),
                         page=metadata.get('page_number', 0),
-                        chunk_type="text",
+                        chunk_type=chunk_type,
                         metadata=metadata
                     ))
             

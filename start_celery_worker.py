@@ -46,7 +46,6 @@ def main():
             'worker',
             '--loglevel=' + ('debug' if debug else 'info'),
             '--concurrency=2',
-            '--queues=metadata',
             '--pool=prefork'
         ])
         

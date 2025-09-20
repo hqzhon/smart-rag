@@ -78,8 +78,19 @@ class EnhancedRAGWorkflow:
             rerank_result = await self.reranker.rerank_documents(query, retrieved_docs, top_k=5)
             reranked_docs = rerank_result.documents
             logger.info(f"Reranked docs: {len(reranked_docs)} documents, strategy: {rerank_result.strategy_used}")
+
+            # --- BEGIN: 小-大切换 ---
+            from app.retrieval.small_to_big_switcher import SmallToBigSwitcher
             
-            context = self._build_context(reranked_docs)
+            final_context_docs = reranked_docs
+            logger.info("执行小-大切换...")
+            switcher = SmallToBigSwitcher()
+            await switcher.async_init()
+            switch_result = await switcher.switch_to_parent_chunks(reranked_docs)
+            final_context_docs = switch_result.switched_documents
+            logger.info(f"小-大切换完成: 获取到 {len(final_context_docs)} 个大块用于上下文。")
+
+            context = self._build_context(final_context_docs)
             logger.info(f"Context: {context}")
             
             response = await self._deepseek_generate_response(query, context)
@@ -287,9 +298,22 @@ class EnhancedRAGWorkflow:
             rerank_result = await self.reranker.rerank_documents(query, retrieved_docs, top_k=5)
             reranked_docs = rerank_result.documents
             
+            yield {"type": "status", "message": "正在准备最终上下文..."}
+
+            # --- BEGIN: 小-大切换 ---
+            from app.retrieval.small_to_big_switcher import SmallToBigSwitcher
+            
+            final_context_docs = reranked_docs
+            logger.info("执行小-大切换 (流式)...")
+            switcher = SmallToBigSwitcher()
+            await switcher.async_init()
+            switch_result = await switcher.switch_to_parent_chunks(reranked_docs)
+            final_context_docs = switch_result.switched_documents
+            logger.info(f"小-大切换完成 (流式): 获取到 {len(final_context_docs)} 个大块用于上下文。")
+
             yield {"type": "status", "message": "正在生成专业医疗回答..."}
             # 过滤掉重排序结果中的None值
-            filtered_docs = [doc for doc in reranked_docs if doc is not None]
+            filtered_docs = [doc for doc in final_context_docs if doc is not None]
             if len(filtered_docs) != len(reranked_docs):
                 logger.warning(f"Filtered out {len(reranked_docs) - len(filtered_docs)} None documents from reranked results")
             context = self._build_context(filtered_docs)

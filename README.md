@@ -17,9 +17,11 @@ An intelligent document Q&A platform that integrates hybrid retrieval, RRF resul
 - **🧠 Intelligent Document Processing**:
   - **Multi-modal Parsing**: Not only extracts text but also understands complex structures like tables and images in PDFs.
   - **Dual-mode Smart Chunking**: Prioritizes semantic chunking using `HybridTextSplitter` and maintains stable "recursive" chunking as a fallback to ensure context integrity.
-- **🎯 4-Path Hybrid Retrieval**:
+- **🎯 Small-to-Big Retrieval & 4-Path Hybrid Retrieval**:
+  - **Small-to-Big Architecture**: Revolutionary retrieval strategy that uses small chunks for precise matching and parent chunks for complete context, optimizing both cost and quality.
   - **Multi-dimensional Recall**: Simultaneously performs four retrieval paths—`VECTOR` (semantic), `CONTENT` (full-text keyword), `SUMMARY` (summary keyword), and `KEYWORDS` (keyword list)—to maximize recall and precision.
   - **RRF Fusion**: Uses the Reciprocal Rank Fusion (RRF) algorithm to intelligently merge results from multiple paths.
+  - **Smart Switching**: Automatically switches from small chunks (for retrieval) to parent chunks (for generation) to ensure optimal context.
 - **🔍 AI Enhancement & Optimization**:
   - **Query Transformation**: Utilizes LLMs to rewrite and expand user queries for better matching with the knowledge base.
   - **AI Reranking**: After retrieval, a more powerful AI model performs a second-pass "close reading" and reranking to ensure the final answer is based on the most relevant, high-quality content.

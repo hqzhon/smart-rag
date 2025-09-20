@@ -13,8 +13,9 @@ from .cleaners import TextCleaner
 from .medical_terminology import MedicalTerminologyStandardizer
 from .quality_filter import TextQualityFilter, ChunkMetadataEnhancer
 from app.utils.logger import setup_logger
-from app.metadata.celery_tasks import generate_metadata_for_chunk
 from app.storage.vector_store import get_vector_store_async
+from app.storage.database import get_db_manager_async
+from app.core.config import get_settings
 from datetime import datetime
 
 logger = setup_logger(__name__)
@@ -46,6 +47,8 @@ class DocumentProcessor:
         self.input_dir = input_dir
         self.output_dir = output_dir
         self.vector_store = vector_store  # 确保能访问到VectorStore实例
+        self.db_manager = None  # 数据库管理器
+        self.settings = get_settings()  # 获取配置
         self.use_enhanced_parser = use_enhanced_parser
         self.enable_cleaning = enable_cleaning
         self.enable_terminology_standardization = enable_terminology_standardization
@@ -74,6 +77,14 @@ class DocumentProcessor:
             self.vector_store = await get_vector_store_async()
             logger.info("vector_store初始化完成")
         return self.vector_store
+        
+    async def _ensure_db_manager(self):
+        """确保数据库管理器已初始化"""
+        if self.db_manager is None:
+            logger.info("初始化数据库管理器...")
+            self.db_manager = await get_db_manager_async()
+            logger.info("数据库管理器初始化完成")
+        return self.db_manager
         
     async def process_single_document(self, file_path: str, document_id: Optional[str] = None) -> Dict[str, Any]:
         """处理单个文档
@@ -195,134 +206,24 @@ class DocumentProcessor:
                 else:
                     metadata["medical_entities"] = entities
             
-            # Step 4: Enhanced metadata
+            # 增强元数据
             enhanced_metadata = self._enhance_metadata(metadata, file_path)
             
-            # Use provided document ID or generate new one
+            # 使用提供的文档ID或生成新的ID
             if document_id is None:
                 document_id = str(uuid.uuid4())
             enhanced_metadata["document_id"] = document_id
-            
-            # Step 5: Quality filtering and metadata enhancement (if enabled)
-            if self.enable_quality_filtering:
-                # Split text into chunks for quality assessment
-                text_chunks = self._split_into_chunks(standardized_text)
-                
-                # Filter chunks by quality
-                filtered_chunks, chunk_metadata = self.quality_filter.filter_text_chunks(
-                    text_chunks, 
-                    [{"source": file_path, "chunk_index": i} for i in range(len(text_chunks))]
-                )
-                
-                # Enhance metadata for each chunk
-                enhanced_chunk_metadata = []
-                for i, (chunk, base_meta) in enumerate(zip(filtered_chunks, chunk_metadata)):
-                    enhanced_meta = self.metadata_enhancer.enhance_chunk_metadata(chunk, base_meta)
-                    # Generate chunk ID that matches vector store format: {document_id}_chunk_{index}
-                    chunk_id = f"{document_id}_chunk_{i}"
-                    enhanced_meta["chunk_id"] = chunk_id
-                    enhanced_meta["chunk_index"] = i  # Ensure chunk_index is set
-                    enhanced_chunk_metadata.append(enhanced_meta)
-                
-                # Update final result with filtered chunks
-                enhanced_metadata["filtered_chunks"] = filtered_chunks
-                enhanced_metadata["chunk_metadata"] = enhanced_chunk_metadata
-                enhanced_metadata["quality_stats"] = {
-                    "original_chunks": len(text_chunks),
-                    "filtered_chunks": len(filtered_chunks),
-                    "filter_ratio": len(filtered_chunks) / len(text_chunks) if text_chunks else 0
-                }
-                
-                # Submit async metadata generation tasks with "store first, update later" strategy
-                if self.enable_async_metadata:
-                    
-                    logger.info(f"准备为 {len(filtered_chunks)} 个文本块创建异步元数据生成任务...")
-                    
-                    # Implement "store first, update later" strategy
-                    # Ensure vector_store is initialized
-                    await self._ensure_vector_store()
-                    if self.vector_store:
-                        for chunk_text, chunk_meta in zip(filtered_chunks, enhanced_chunk_metadata):
-                            chunk_id = chunk_meta.get("chunk_id")
-                            if chunk_id:
-                                try:
-                                    # Prepare initial document data (store first)
-                                    initial_metadata = {
-                                        "document_id": document_id,
-                                        "chunk_index": chunk_meta.get("chunk_index", 0),
-                                        "total_chunks": len(filtered_chunks),
-                                        "created_at": datetime.now().isoformat(),
-                                        "status": "processing",
-                                        "has_metadata": False  # Mark that metadata is not yet generated
-                                    }
-                                    
-                                    # Store to ChromaDB immediately (store first)
-                                    await self.vector_store.add_documents(
-                                        documents=[{
-                                            "content": chunk_text,
-                                            "metadata": initial_metadata
-                                        }],
-                                        ids=[chunk_id]
-                                    )
-                                    logger.debug(f"已存储块 {chunk_id} 到ChromaDB")
-                                    
-                                    # Then submit async metadata generation task (update later)
-                                    task = generate_metadata_for_chunk.delay(
-                                        chunk_id,
-                                        chunk_text,
-                                        document_id
-                                    )
-                                    logger.debug(f"Celery任务已提交: chunk_id={chunk_id}, task_id={task.id}")
-                                except Exception as e:
-                                    logger.error(f"存储块 {chunk_id} 到ChromaDB或推送任务失败: {e}")
-                        
-                        logger.info("所有文本块已存储到ChromaDB，元数据生成任务已成功提交到Celery")
-                    else:
-                        logger.warning("VectorStore未初始化，跳过ChromaDB存储，仅提交异步任务")
-                        # Fallback to original logic
-                        for chunk_text, chunk_meta in zip(filtered_chunks, enhanced_chunk_metadata):
-                            chunk_id = chunk_meta.get("chunk_id")
-                            if chunk_id:
-                                try:
-                                    task = generate_metadata_for_chunk.delay(
-                                        chunk_id,
-                                        chunk_text,
-                                        document_id
-                                    )
-                                    logger.debug(f"Celery任务已提交: chunk_id={chunk_id}, task_id={task.id}")
-                                except Exception as e:
-                                    logger.error(f"提交Celery任务失败 chunk_id={chunk_id}: {e}")
-                        
-                        logger.info("所有元数据生成任务已成功提交到Celery")
-                else:
-                    logger.info("异步元数据处理已禁用，跳过任务提交")
-            else:
-                # If quality filtering is disabled, create empty chunk metadata list
-                enhanced_chunk_metadata = []
-            
-            # Prepare final result
+
+            # 准备最终结果
             final_result = {
                 "file_path": file_path,
                 "document_id": document_id,
-                "chunk_ids": [chunk_meta.get("chunk_id") for chunk_meta in enhanced_chunk_metadata if chunk_meta.get("chunk_id")],
+                "text": standardized_text, # 返回最干净的文本供后续处理
                 "raw_text": raw_text,
-                "cleaned_text": cleaned_text,
-                "standardized_text": standardized_text,
-                "structured_text": structured_text,
-                "metadata": enhanced_metadata,
-                "processing_stats": {
-                    "raw_length": len(raw_text),
-                    "cleaned_length": len(cleaned_text),
-                    "standardized_length": len(standardized_text),
-                    "structure_elements": len(structured_elements) if 'structured_elements' in locals() else 0,
-                    "total_chunks": len(enhanced_chunk_metadata)
-                }
+                "metadata": enhanced_metadata
             }
             
-            # Save processing results
-            self._save_processing_results(final_result, file_path)
-            
-            logger.info(f"Successfully processed document: {os.path.basename(file_path)}")
+            logger.info(f"Successfully processed document {document_id}: {os.path.basename(file_path)}")
             return final_result
             
         except Exception as e:
@@ -647,7 +548,7 @@ class DocumentProcessor:
             json.dump(result["processing_stats"], f, ensure_ascii=False, indent=2)
     
     def _split_into_chunks(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-        """将文本分割成块
+        """将文本分割成块（传统单阶段分块）
         
         Args:
             text: 输入文本
@@ -693,33 +594,3 @@ class DocumentProcessor:
         
         return chunks
     
-    async def process_all_documents(self) -> List[Dict[str, Any]]:
-        """处理目录中的所有PDF文档
-            处理结果列表
-        """
-        results = []
-        
-        if not os.path.exists(self.input_dir):
-            logger.warning(f"输入目录不存在: {self.input_dir}")
-            return results
-        
-        # 遍历目录中的所有PDF文件
-        pdf_files = [f for f in os.listdir(self.input_dir) if f.lower().endswith('.pdf')]
-        
-        if not pdf_files:
-            logger.info(f"在目录 {self.input_dir} 中未找到PDF文件")
-            return results
-        
-        logger.info(f"找到 {len(pdf_files)} 个PDF文件，开始处理...")
-        
-        for filename in pdf_files:
-            file_path = os.path.join(self.input_dir, filename)
-            try:
-                result = await self.process_single_document(file_path)
-                results.append(result)
-            except Exception as e:
-                logger.error(f"跳过文件 {filename}: {str(e)}")
-                continue
-        
-        logger.info(f"文档处理完成，成功处理 {len(results)} 个文件")
-        return results

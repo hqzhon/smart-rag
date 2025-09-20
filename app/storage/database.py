@@ -126,6 +126,22 @@ class DatabaseManager(metaclass=SingletonMeta):
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
                 
+                # 大块存储表（小-大检索功能）
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS parent_chunks (
+                        id VARCHAR(255) PRIMARY KEY COMMENT '大块的唯一ID',
+                        document_id VARCHAR(255) NOT NULL COMMENT '所属原始文档的ID',
+                        content LONGTEXT NOT NULL COMMENT '大块的完整原文内容',
+                        summary TEXT COMMENT '大块摘要',
+                        keywords TEXT COMMENT '大块关键词',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                        INDEX idx_document_id (document_id),
+                        INDEX idx_created_at (created_at),
+                        INDEX idx_document_created (document_id, created_at),
+                        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用于存储"大块"原文的表'
+                """)
+                
                 # 添加新字段（如果不存在）
                 try:
                     cursor.execute("ALTER TABLE chat_history ADD COLUMN question LONGTEXT")
@@ -630,6 +646,134 @@ class DatabaseManager(metaclass=SingletonMeta):
                     return True
         except Exception as e:
             logger.error(f"MySQL健康检查失败: {e}")
+            return False
+    
+    # ==================== Parent Chunks 操作方法 ====================
+    
+    def save_parent_chunk(self, parent_chunk_data: Dict[str, Any]) -> bool:
+        """保存大块数据
+        
+        Args:
+            parent_chunk_data: 大块数据，包含id, document_id, content, summary, keywords
+            
+        Returns:
+            保存是否成功
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO parent_chunks (id, document_id, content, summary, keywords)
+                        VALUES (%(id)s, %(document_id)s, %(content)s, %(summary)s, %(keywords)s)
+                        ON DUPLICATE KEY UPDATE
+                        content = VALUES(content),
+                        summary = VALUES(summary),
+                        keywords = VALUES(keywords)
+                    """, parent_chunk_data)
+                    
+            logger.info(f"大块数据保存成功: {parent_chunk_data['id']}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"保存大块数据失败: {e}")
+            return False
+    
+    def get_parent_chunks_by_ids(self, parent_chunk_ids: List[str]) -> List[Dict[str, Any]]:
+        """根据ID列表批量获取大块数据
+        
+        Args:
+            parent_chunk_ids: 大块ID列表
+            
+        Returns:
+            大块数据列表
+        """
+        if not parent_chunk_ids:
+            return []
+            
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                    # 构建IN查询的占位符
+                    placeholders = ','.join(['%s'] * len(parent_chunk_ids))
+                    
+                    cursor.execute(f"""
+                        SELECT id, document_id, content, summary, keywords, created_at
+                        FROM parent_chunks
+                        WHERE id IN ({placeholders})
+                        ORDER BY created_at
+                    """, parent_chunk_ids)
+                    
+                    return cursor.fetchall()
+                    
+        except Exception as e:
+            logger.error(f"批量获取大块数据失败: {e}")
+            return []
+    
+    async def batch_get_parent_chunks(self, parent_chunk_ids: List[str]) -> List[Dict[str, Any]]:
+        """异步批量获取大块数据
+        
+        Args:
+            parent_chunk_ids: 大块ID列表
+            
+        Returns:
+            大块数据列表
+        """
+        import asyncio
+        
+        def _sync_get():
+            return self.get_parent_chunks_by_ids(parent_chunk_ids)
+        
+        # 在线程池中执行同步数据库操作
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _sync_get)
+    
+    def get_parent_chunks_by_document_id(self, document_id: str) -> List[Dict[str, Any]]:
+        """根据文档ID获取所有大块数据
+        
+        Args:
+            document_id: 文档ID
+            
+        Returns:
+            大块数据列表
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                    cursor.execute("""
+                        SELECT id, document_id, content, summary, keywords, created_at
+                        FROM parent_chunks
+                        WHERE document_id = %s
+                        ORDER BY created_at
+                    """, (document_id,))
+                    
+                    return cursor.fetchall()
+                    
+        except Exception as e:
+            logger.error(f"根据文档ID获取大块数据失败: {e}")
+            return []
+    
+    def delete_parent_chunks_by_document_id(self, document_id: str) -> bool:
+        """根据文档ID删除所有大块数据
+        
+        Args:
+            document_id: 文档ID
+            
+        Returns:
+            删除是否成功
+        """
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        DELETE FROM parent_chunks WHERE document_id = %s
+                    """, (document_id,))
+                    
+                    deleted_count = cursor.rowcount
+                    logger.info(f"删除文档 {document_id} 的 {deleted_count} 个大块数据")
+                    return True
+                    
+        except Exception as e:
+            logger.error(f"删除大块数据失败: {e}")
             return False
 
 

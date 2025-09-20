@@ -58,20 +58,35 @@ const formatFileSize = (bytes: number): string => {
 };
 
 interface DocumentChunk {
-  chunk_id: number;
+  id: number;
   chunk_index: number;
   content: string;
-  chunk_type: string;
-  page_number?: number | null;
-  metadata: Record<string, any> & {
-    keywords?: string[];
+  created_at?: string;
+  content_length?: number;
+  metadata: Record<string, unknown> & {
+    keywords?: string[] | string;
     summary?: string;
+    document_id?: string;
+    chunk_type?: string;
+    source?: string;
+    page_number?: number;
+    start_char?: number;
+    end_char?: number;
+    child_index?: number;
+    content_length?: number;
   };
 }
 
 interface ChunksResponse {
   status: string;
   document_id: string;
+  document_info?: {
+    id: string;
+    title: string;
+    file_type: string;
+    file_size: number;
+    created_at: string;
+  };
   total_chunks: number;
   page: number;
   limit: number;
@@ -102,7 +117,15 @@ const DocumentPreviewPage: React.FC = () => {
   const [totalChunksPages, setTotalChunksPages] = useState<number>(0);
   
   // 文档信息
-  const [documentInfo, setDocumentInfo] = useState<any>(null);
+  const [documentInfo, setDocumentInfo] = useState<{
+    id?: string;
+    title?: string;
+    file_type?: string;
+    type?: string;
+    file_size?: number;
+    created_at?: string;
+    [key: string]: any;
+  } | null>(null);
   const [documentType, setDocumentType] = useState<string>('');
   const [isPdfFile, setIsPdfFile] = useState<boolean>(false);
 
@@ -146,39 +169,48 @@ const DocumentPreviewPage: React.FC = () => {
         const data = await response.json();
         setDocumentInfo(data);
       } catch (error) {
-        console.error('Failed to load document info:', error);
+        // Failed to load document info
+        setPdfError('文档信息加载失败');
       }
     };
     
     // 加载分块数据
-    const loadChunks = async () => {
-      setChunksLoading(true);
-      setChunksError(null);
+  const loadChunks = async () => {
+    setChunksLoading(true);
+    setChunksError(null);
+    
+    try {
+      const response = await fetch(`/api/v1/documents/${documentId}/chunks?page=1&limit=20`);
       
-      try {
-        const response = await fetch(`/api/v1/documents/${documentId}/chunks?page=1&limit=20`);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data: ChunksResponse = await response.json();
-        
-        setChunks(data.chunks || []);
-        setTotalChunks(data.total_chunks || 0);
-        setTotalChunksPages(data.total_pages || 0);
-        setChunksPage(data.page || 1);
-        
-        if (data.message) {
-          setChunksError(data.message);
-        }
-      } catch (error) {
-        console.error('Failed to load chunks:', error);
-        setChunksError('加载分块信息失败');
-      } finally {
-        setChunksLoading(false);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
+      
+      const data: ChunksResponse = await response.json();
+      
+      setChunks(data.chunks || []);
+      setTotalChunks(data.total_chunks || 0);
+      setTotalChunksPages(data.total_pages || 0);
+      setChunksPage(data.page || 1);
+      
+      // 如果有文档标题，更新文档信息
+      if (data.document_info?.title && !documentInfo?.title) {
+        setDocumentInfo(prev => ({
+          ...prev,
+          title: data.document_info!.title
+        }));
+      }
+      
+      if (data.message) {
+        setChunksError(data.message);
+      }
+    } catch (err) {
+      // Failed to load chunks
+      setChunksError('加载分块信息失败');
+    } finally {
+      setChunksLoading(false);
+    }
+  };
 
   // PDF加载成功回调
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
@@ -191,12 +223,11 @@ const DocumentPreviewPage: React.FC = () => {
   const onDocumentLoadError = useCallback((error: Error) => {
     console.error('PDF load error:', error);
     setPdfError('PDF文件加载失败');
-
   }, []);
 
   // PDF开始加载回调
   const onDocumentLoadStart = useCallback(() => {
-    console.log('PDF loading started');
+    // PDF loading started
   }, []);
 
   // 缩放控制
@@ -213,8 +244,8 @@ const DocumentPreviewPage: React.FC = () => {
     setSelectedChunk(chunk);
     
     // 如果分块有页码信息，跳转到对应页面
-    if (chunk.page_number && chunk.page_number > 0) {
-      setCurrentPage(chunk.page_number);
+    if (chunk.metadata?.page_number && chunk.metadata.page_number > 0) {
+      setCurrentPage(chunk.metadata.page_number);
     }
     // 注意：当前后端返回的数据中page_number为null，暂时无法实现页面跳转
     // 这是实现联动高亮功能的关键缺失部分
@@ -242,11 +273,19 @@ const DocumentPreviewPage: React.FC = () => {
       setTotalChunksPages(data.total_pages || 0);
       setChunksPage(data.page || 1);
       
+      // 如果有文档标题，更新文档信息
+      if (data.document_info?.title && !documentInfo?.title) {
+        setDocumentInfo(prev => ({
+          ...prev,
+          title: data.document_info!.title
+        }));
+      }
+      
       if (data.message) {
         setChunksError(data.message);
       }
-    } catch (error) {
-      console.error('Failed to load chunks:', error);
+    } catch (err) {
+      // Failed to load chunks
       setChunksError('加载分块信息失败');
     } finally {
       setChunksLoading(false);
@@ -441,9 +480,9 @@ const DocumentPreviewPage: React.FC = () => {
                       <Typography variant="body2">
                         <strong>文件类型：</strong>{getFileTypeLabel(documentType)}
                       </Typography>
-                      {documentInfo.size && (
+                      {documentInfo.file_size && (
                         <Typography variant="body2">
-                          <strong>文件大小：</strong>{formatFileSize(documentInfo.size)}
+                          <strong>文件大小：</strong>{formatFileSize(documentInfo.file_size)}
                         </Typography>
                       )}
                       <Typography variant="body2">
@@ -502,9 +541,9 @@ const DocumentPreviewPage: React.FC = () => {
               
               <List sx={{ flex: 1, overflow: 'auto' }}>
                 {chunks.map((chunk) => (
-                  <ListItem key={`${chunk.chunk_id}-${chunk.chunk_index}`} disablePadding>
-                    <ListItemButton
-                      selected={selectedChunk?.chunk_id === chunk.chunk_id && selectedChunk?.chunk_index === chunk.chunk_index}
+                  <ListItem key={`${chunk.id}-${chunk.chunk_index}`} disablePadding>
+                  <ListItemButton
+                    selected={selectedChunk?.id === chunk.id && selectedChunk?.chunk_index === chunk.chunk_index}
                       onClick={() => handleChunkSelect(chunk)}
                       sx={{ 
                         border: 1, 
@@ -527,14 +566,14 @@ const DocumentPreviewPage: React.FC = () => {
                               variant="outlined"
                             />
                             <Chip 
-                              label={chunk.chunk_type} 
+                              label={chunk.metadata?.chunk_type || 'unknown'} 
                               size="small" 
                               color="secondary" 
                               variant="outlined"
                             />
-                            {chunk.page_number && chunk.page_number > 0 && (
+                            {chunk.metadata?.page_number && chunk.metadata.page_number > 0 && (
                               <Chip 
-                                label={`第${chunk.page_number}页`} 
+                                label={`第${chunk.metadata.page_number}页`} 
                                 size="small" 
                                 variant="outlined"
                               />
@@ -592,15 +631,56 @@ const DocumentPreviewPage: React.FC = () => {
           
           <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
             <Chip label={`分块 #${selectedChunk.chunk_index + 1}`} color="primary" />
-            <Chip label={selectedChunk.chunk_type} color="secondary" />
-            {selectedChunk.page_number && selectedChunk.page_number > 0 && (
-              <Chip label={`第${selectedChunk.page_number}页`} variant="outlined" />
+            <Chip label={selectedChunk.metadata?.chunk_type || 'unknown'} color="secondary" />
+            {selectedChunk.metadata?.page_number && selectedChunk.metadata.page_number > 0 && (
+              <Chip label={`第${selectedChunk.metadata.page_number}页`} variant="outlined" />
+            )}
+
+            {typeof selectedChunk.metadata?.child_index === 'number' && (
+              <Chip label={`子块索引: ${selectedChunk.metadata.child_index}`} variant="outlined" color="warning" />
             )}
           </Box>
           
           <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
             {selectedChunk.content}
           </Typography>
+          
+          {/* 字符位置信息 */}
+          {(selectedChunk.metadata?.start_char !== undefined || selectedChunk.metadata?.end_char !== undefined) && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                字符位置
+              </Typography>
+              <Paper 
+                sx={{ 
+                  p: 2, 
+                  bgcolor: 'warning.light', 
+                  border: '1px solid', 
+                  borderColor: 'warning.main',
+                  borderRadius: 2
+                }}
+              >
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  {selectedChunk.metadata?.start_char !== undefined && (
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      起始位置: {selectedChunk.metadata.start_char}
+                    </Typography>
+                  )}
+                  {typeof selectedChunk.metadata?.end_char === 'number' && (
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      结束位置: {selectedChunk.metadata.end_char}
+                    </Typography>
+                  )}
+                  {typeof selectedChunk.metadata?.start_char === 'number' && typeof selectedChunk.metadata?.end_char === 'number' && (
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      长度: {selectedChunk.metadata.end_char - selectedChunk.metadata.start_char}
+                    </Typography>
+                  )}
+                </Box>
+              </Paper>
+            </>
+          )}
           
           {/* 关键词展示 */}
           {selectedChunk.metadata.keywords && (
@@ -621,33 +701,49 @@ const DocumentPreviewPage: React.FC = () => {
                   borderRadius: 2
                 }}
               >
-                {Array.isArray(selectedChunk.metadata.keywords) ? (
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {selectedChunk.metadata.keywords.map((keyword, index) => (
-                      <Chip 
-                        key={index}
-                        label={keyword}
-                        size="small"
-                        sx={{ 
-                          bgcolor: 'info.main',
-                          color: 'info.contrastText',
-                          fontWeight: 'medium'
-                        }}
-                      />
-                    ))}
-                  </Box>
-                ) : (
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      lineHeight: 1.6,
-                      color: 'info.contrastText',
-                      fontWeight: 'medium'
-                    }}
-                  >
-                    {selectedChunk.metadata.keywords}
-                  </Typography>
-                )}
+                {(() => {
+                  let keywords = selectedChunk.metadata.keywords;
+                  
+                  // 如果是字符串，尝试解析为JSON
+                  if (typeof keywords === 'string') {
+                    try {
+                      const parsed = JSON.parse(keywords);
+                      if (Array.isArray(parsed)) {
+                        keywords = parsed;
+                      }
+                    } catch (e) {
+                      // 如果解析失败，保持原字符串
+                    }
+                  }
+                  
+                  return Array.isArray(keywords) ? (
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {keywords.map((keyword, index) => (
+                        <Chip 
+                          key={index}
+                          label={keyword}
+                          size="small"
+                          sx={{ 
+                            bgcolor: 'info.main',
+                            color: 'info.contrastText',
+                            fontWeight: 'medium'
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        lineHeight: 1.6,
+                        color: 'info.contrastText',
+                        fontWeight: 'medium'
+                      }}
+                    >
+                      {keywords}
+                    </Typography>
+                  );
+                })()}
               </Paper>
             </>
           )}
@@ -683,7 +779,18 @@ const DocumentPreviewPage: React.FC = () => {
           )}
           
           {/* 其他元数据 */}
-          {Object.keys(selectedChunk.metadata).filter(key => key !== 'keywords' && key !== 'summary').length > 0 && (
+          {Object.keys(selectedChunk.metadata).filter(key => 
+            key !== 'keywords' && 
+            key !== 'summary' && 
+            key !== 'document_id' && 
+            key !== 'chunk_type' && 
+            key !== 'source' && 
+            key !== 'page_number' && 
+            key !== 'start_char' && 
+            key !== 'end_char' && 
+            key !== 'child_index' && 
+            key !== 'content_length'
+          ).length > 0 && (
             <>
               <Divider sx={{ my: 2 }} />
               <Typography variant="subtitle2" gutterBottom>
@@ -691,7 +798,18 @@ const DocumentPreviewPage: React.FC = () => {
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 {Object.entries(selectedChunk.metadata)
-                  .filter(([key]) => key !== 'keywords' && key !== 'summary')
+                  .filter(([key]) => 
+                    key !== 'keywords' && 
+                    key !== 'summary' && 
+                    key !== 'document_id' && 
+                    key !== 'chunk_type' && 
+                    key !== 'source' && 
+                    key !== 'page_number' && 
+                    key !== 'start_char' && 
+                    key !== 'end_char' && 
+                    key !== 'child_index' && 
+                    key !== 'content_length'
+                  )
                   .map(([key, value]) => (
                     <Chip 
                       key={key} 

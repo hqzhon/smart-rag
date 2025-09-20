@@ -91,6 +91,14 @@ class Settings(BaseSettings):
     embedding_cache_ttl: int = Field(env="EMBEDDING_CACHE_TTL", default=3600, description="嵌入缓存TTL(秒)")
     chunking_separators: str = Field(env="CHUNKING_SEPARATORS", default="\n##SECTION_START_,\n\n,。\n,.\n\n", description="分块分隔符(逗号分隔)")
     
+    # 小-大检索配置
+    
+    parent_chunk_size: int = Field(env="PARENT_CHUNK_SIZE", default=1024, description="大块(父块)大小")
+    child_chunk_size: int = Field(env="CHILD_CHUNK_SIZE", default=256, description="小块(子块)大小")
+    parent_chunk_overlap: int = Field(env="PARENT_CHUNK_OVERLAP", default=200, description="大块重叠大小")
+    child_chunk_overlap: int = Field(env="CHILD_CHUNK_OVERLAP", default=0, description="小块重叠大小")
+    small_to_big_dedup_threshold: float = Field(env="SMALL_TO_BIG_DEDUP_THRESHOLD", default=0.85, description="小-大检索去重阈值")
+    
     # 模型配置
     embedding_model: str = Field(env="EMBEDDING_MODEL", description="嵌入模型名称")
     llm_model: str = Field(env="LLM_MODEL", description="LLM模型名称")

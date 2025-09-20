@@ -14,7 +14,6 @@ from .test_config import set_test_env_vars, clear_test_env_vars, get_test_config
 
 # 导入测试所需的模块
 from app.metadata.clients.qianwen_client import QianwenClient
-from app.metadata.summarizers.lightweight_summarizer import LightweightSummaryGenerator
 from app.metadata.extractors.keybert_extractor import KeyBERTExtractor
 from app.metadata.evaluators.quality_evaluator import QualityEvaluator
 
@@ -237,23 +236,6 @@ async def real_qianwen_client(test_config):
     client = QianwenClient(api_key=test_config["qianwen_api_key"])
     yield client
     await client.close()
-
-@pytest.fixture
-async def real_components(real_qianwen_client):
-    """真实组件（仅在启用真实API时使用）"""
-    summarizer = LightweightSummaryGenerator()
-    extractor = KeyBERTExtractor()
-    evaluator = QualityEvaluator()
-    
-    yield {
-        "client": real_qianwen_client,
-        "summarizer": summarizer,
-        "extractor": extractor,
-        "evaluator": evaluator
-    }
-
-
-
 
 
 @pytest.fixture

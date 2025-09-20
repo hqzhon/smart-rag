@@ -21,6 +21,7 @@ from app.retrieval.advanced_config import AdvancedRAGConfig, RetrievalPath, Fusi
 from app.retrieval.query_router import QueryRouter, QueryAnalysis, QueryType, QueryComplexity
 from app.retrieval.progressive_retriever import ProgressiveRetriever, RetrievalStage, ProgressiveResult
 from app.retrieval.adaptive_weights import AdaptiveWeightAdjuster, QueryContext, PerformanceMetrics, AdaptationStrategy
+from app.retrieval.small_to_big_deduplicator import SmallToBigDeduplicator
 from app.utils.logger import setup_logger
 from app.core.config import get_settings
 
@@ -130,6 +131,9 @@ class AdvancedFusionRetriever:
         
         # Initialize fusion and reranking
         self.fusion_engine = FusionEngine()
+        
+        # Initialize small-to-big deduplicator
+        self.deduplicator = SmallToBigDeduplicator()
         self.reranker = None
         
         if self.config.rerank.enabled:
@@ -434,8 +438,22 @@ class AdvancedFusionRetriever:
             elif isinstance(result, Exception):
                 logger.error(f"Retrieval task failed: {str(result)}")
         
-        # Fuse results with adaptive weights
+        # Apply small-to-big deduplication before fusion
         if valid_results:
+            # Check if small-to-big retrieval is enabled
+            from app.core.config import get_settings
+            settings = get_settings()
+            
+            logger.info("应用小-大检索去重择优处理")
+            valid_results = self.deduplicator.deduplicate_path_results(valid_results)
+                
+            # Log deduplication stats
+            dedup_stats = self.deduplicator.get_deduplication_stats(
+                {path.value: result.documents for path, result in path_results.items()},
+                valid_results
+            )
+            logger.info(f"去重统计: {dedup_stats}")
+            
             path_weights = adaptive_weights or {
                 path: self.config.paths[path].weight 
                 for path in valid_results.keys()

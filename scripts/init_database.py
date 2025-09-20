@@ -141,6 +141,21 @@ def create_tables():
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='搜索历史表'
                 """)
                 
+                print("📦 创建大块存储表 (parent_chunks)...")
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS parent_chunks (
+                        id VARCHAR(255) PRIMARY KEY COMMENT '大块的唯一ID',
+                        document_id VARCHAR(255) NOT NULL COMMENT '所属原始文档的ID',
+                        content LONGTEXT NOT NULL COMMENT '大块的完整原文内容',
+                        summary TEXT COMMENT '大块摘要',
+                        keywords TEXT COMMENT '大块关键词',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                        INDEX idx_document_id (document_id),
+                        INDEX idx_created_at (created_at),
+                        FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用于存储大块原文的表'
+                """)
+                
                 print("✅ 所有数据表创建完成")
                 
     except Exception as e:

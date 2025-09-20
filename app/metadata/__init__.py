@@ -15,8 +15,6 @@ from .models.metadata_models import (
     KeywordQuality
 )
 from .clients.qianwen_client import QianwenClient
-from .summarizers.lightweight_summarizer import LightweightSummaryGenerator
-from .extractors.keybert_extractor import KeyBERTExtractor
 
 from .evaluators.quality_evaluator import QualityEvaluator
 
@@ -29,9 +27,6 @@ __all__ = [
     'KeywordQuality',
     # API客户端
     'QianwenClient',
-    # 核心组件
-    'LightweightSummaryGenerator',
-    'KeyBERTExtractor',
 
     'QualityEvaluator'
 ]

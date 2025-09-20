@@ -20,8 +20,11 @@ formatter = logging.Formatter(
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
-# Create Celery app with minimal configuration
-app = Celery('smart_rag')
+# Create Celery app with explicit task inclusion
+app = Celery(
+    'smart_rag',
+    include=['app.tasks.document_tasks']
+)
 
 # Basic configuration
 app.conf.update(
@@ -42,15 +45,6 @@ app.conf.update(
     worker_pool='threads',
     worker_concurrency=2,
 )
-
-# Import tasks to register them
-try:
-    from app.metadata import celery_tasks
-except ImportError as e:
-    print(f"Warning: Could not import celery_tasks: {e}")
-
-# Auto-discover tasks from celery_tasks module
-app.autodiscover_tasks(['app.metadata.celery_tasks'])
 
 # Export the app instance
 celery_app = app

@@ -17,7 +17,6 @@ from app.retrieval.query_transformer import QueryTransformer
 from app.workflow.deepseek_client import DeepseekClient
 from app.workflow.qianwen_client import QianwenClient
 from app.metadata.extractors.keybert_extractor import KeyBERTExtractor
-from app.metadata.summarizers.lightweight_summarizer import LightweightSummaryGenerator
 
 
 @pytest.fixture
@@ -205,17 +204,6 @@ def mock_keybert_extractor():
     mock.extract_keywords = mock_extract_keywords
     mock.model_available = True
     mock._models_initialized = True
-    
-    return mock
-
-
-@pytest.fixture
-def mock_lightweight_summarizer():
-    """创建模拟轻量级摘要生成器"""
-    mock = AsyncMock(spec=LightweightSummaryGenerator)
-    
-    # 模拟方法
-    mock.generate_summary.return_value = "这是生成的摘要内容，简明扼要地概括了原文的主要内容。"
     
     return mock
 

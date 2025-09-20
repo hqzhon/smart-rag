@@ -74,11 +74,11 @@ class DocumentStatusResponse(BaseModel):
 
 @router.post("/documents/upload", response_model=DocumentUploadResponse)
 async def upload_document(
-    file: UploadFile = File(...), 
-    background_tasks: BackgroundTasks = None
+    file: UploadFile = File(...)
 ):
-    """上传PDF文档"""
+    """上传文档并将其处理任务推送到Celery队列"""
     from app.services.chat_service import ChatService
+    from app.tasks.document_tasks import process_document_task
     
     try:
         # 获取全局服务实例
@@ -91,16 +91,16 @@ async def upload_document(
         # 读取文件内容
         file_content = await file.read()
         
-        # 上传文档
+        # 上传文档（仅创建记录和保存文件）
         document = await document_service.upload_document(
             file_content=file_content,
             filename=file.filename,
             content_type=file.content_type
         )
         
-        # 后台处理文档
-        if background_tasks:
-            background_tasks.add_task(process_document_background, document, document_service)
+        # 将文档处理任务推送到Celery队列
+        process_document_task.delay(document.id)
+        logger.info(f"文档处理任务已推送到Celery队列: {document.id}")
         
         # 创建会话
         session_id = await chat_service.create_session()
@@ -109,30 +109,18 @@ async def upload_document(
         
         return DocumentUploadResponse(
             session_id=session_id,
-            document_id=document.id,  # 返回真实的document_id
-            status="uploaded",
+            document_id=document.id,
+            status="processing_queued", # 更新状态为“已进入处理队列”
             filename=document.filename,
-            message="文件上传成功，正在处理中..."
+            message="文件上传成功，已加入后台处理队列..."
         )
         
     except ValueError as e:
         logger.warning(f"文件验证失败: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"上传PDF时出错: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"上传PDF时出错: {str(e)}")
-
-
-async def process_document_background(document: Document, document_service: DocumentService):
-    """后台处理文档"""
-    try:
-        result = await document_service.process_document(document)
-        logger.info(f"文档处理完成: {document.filename}")
-    except Exception as e:
-        logger.error(f"后台文档处理失败: {str(e)}")
-
-
-
+        logger.error(f"上传文档时出错: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"上传文档时出错: {str(e)}")
 
 
 @router.get("/documents/supported-formats", response_model=SupportedFormatsResponse)
@@ -550,75 +538,99 @@ async def get_document_raw(document_id: str):
 
 
 @router.get("/documents/{document_id}/chunks")
-async def get_document_chunks(document_id: str, page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=200)):
+async def get_document_chunks(document_id: str, page: int = Query(1, ge=1), limit: int = Query(20, ge=1, le=100)):
     """获取文档的分块信息"""
     try:
         from app.storage.database import get_db_manager
-        from app.storage.vector_store import get_vector_store_async
         
         db = get_db_manager()
-        vector_store = await get_vector_store_async()
         
-        # 验证文档是否存在
+        # 验证文档是否存在并获取文档信息
         document = db.get_document(document_id)
         if not document:
             raise HTTPException(status_code=404, detail="文档不存在")
         
-        # 从向量数据库获取文档的所有分块
-        try:
-            # 使用新的get_document_chunks方法
-            chunks_data = await vector_store.get_document_chunks(document_id)
-            
-            # 转换为更友好的格式
-            chunks = []
-            for chunk_data in chunks_data:
-                chunk_info = {
-                    "chunk_id": chunk_data["metadata"].get("chunk_id", ""),
-                    "chunk_index": chunk_data["metadata"].get("chunk_index", 0),
-                    "content": chunk_data["content"],
-                    "chunk_type": chunk_data["metadata"].get("chunk_type", "text"),
-                    "page_number": chunk_data["metadata"].get("page_number"),
-                    "metadata": {
-                        k: v for k, v in chunk_data["metadata"].items() 
-                        if k not in ["chunk_id", "chunk_index", "chunk_type", "page_number", "document_id"]
-                    }
-                }
-                chunks.append(chunk_info)
-            
-            # 按chunk_index排序
-            chunks.sort(key=lambda x: x.get("chunk_index", 0))
-            
-            # 分页处理
-            total_chunks = len(chunks)
-            start_idx = (page - 1) * limit
-            end_idx = start_idx + limit
-            paginated_chunks = chunks[start_idx:end_idx]
-            
+        # 从MySQL获取分块信息
+        parent_chunks = db.get_parent_chunks_by_document_id(document_id)
+        
+        if not parent_chunks:
             return {
                 "status": "success",
                 "document_id": document_id,
-                "total_chunks": total_chunks,
-                "page": page,
-                "limit": limit,
-                "total_pages": (total_chunks + limit - 1) // limit,
-                "chunks": paginated_chunks
-            }
-            
-        except Exception as ve:
-            logger.warning(f"从向量数据库获取分块失败: {str(ve)}，返回空结果")
-            return {
-                "status": "success",
-                "document_id": document_id,
+                "document_info": {
+                    "id": document.get("id"),
+                    "title": document.get("title", ""),
+                    "file_type": document.get("file_type", ""),
+                    "file_size": document.get("file_size"),
+                    "created_at": document.get("created_at").isoformat() if document.get("created_at") else None
+                },
                 "total_chunks": 0,
                 "page": page,
                 "limit": limit,
                 "total_pages": 0,
                 "chunks": [],
-                "message": "文档尚未完成分块处理或分块数据不可用"
+                "message": "该文档暂无分块信息"
             }
+        
+        # 转换为前端需要的格式
+        chunks = []
+        for idx, chunk_data in enumerate(parent_chunks):
+            # 处理关键词字段
+            keywords = chunk_data.get("keywords", "")
+            if isinstance(keywords, str) and keywords.strip():
+                # 尝试解析为数组
+                try:
+                    import json
+                    keywords_list = json.loads(keywords)
+                    if not isinstance(keywords_list, list):
+                        keywords_list = [k.strip() for k in keywords.split(',') if k.strip()]
+                except (json.JSONDecodeError, AttributeError):
+                    keywords_list = [k.strip() for k in keywords.split(',') if k.strip()]
+            else:
+                keywords_list = []
+            
+            chunk_info = {
+                "id": chunk_data["id"],
+                "chunk_index": idx,
+                "type": "parent",
+                "content": chunk_data["content"],
+                "created_at": chunk_data.get("created_at").isoformat() if chunk_data.get("created_at") else None,
+                "content_length": len(chunk_data["content"]),
+                "metadata": {
+                    "document_id": chunk_data["document_id"],
+                    "chunk_type": "parent",
+                    "source": "mysql_parent_chunks",
+                    "summary": chunk_data.get("summary", ""),
+                    "keywords": keywords_list
+                }
+            }
+            chunks.append(chunk_info)
+        
+        # 分页处理
+        total_chunks = len(chunks)
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginated_chunks = chunks[start_idx:end_idx]
+        
+        return {
+            "status": "success",
+            "document_id": document_id,
+            "document_info": {
+                "id": document.get("id"),
+                "title": document.get("title", ""),
+                "file_type": document.get("file_type", ""),
+                "file_size": document.get("file_size"),
+                "created_at": document.get("created_at").isoformat() if document.get("created_at") else None
+            },
+            "total_chunks": total_chunks,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total_chunks + limit - 1) // limit,
+            "chunks": paginated_chunks
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取文档分块失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取文档分块失败: {str(e)}")
+        logger.error(f"获取文档分块信息失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取文档分块信息失败: {str(e)}")

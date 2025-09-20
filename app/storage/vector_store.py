@@ -299,6 +299,59 @@ class VectorStore(metaclass=SingletonMeta):
             logger.error(f"更新文档元数据时出错: {str(e)}")
             return False
     
+    async def add_documents_async(self, documents: List[str], metadatas: List[Dict[str, Any]], ids: List[str]) -> None:
+        """异步批量添加文档到向量存储（小-大检索专用）
+        
+        Args:
+            documents: 文档内容列表
+            metadatas: 元数据列表
+            ids: 文档ID列表
+        """
+        if not documents:
+            logger.warning("没有文档需要添加")
+            return
+        
+        try:
+            logger.info(f"开始异步生成 {len(documents)} 个文档的嵌入向量...")
+            embeddings = await self.embedding_model.embed_documents(documents)
+            
+            self.collection.add(
+                embeddings=embeddings,
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
+            
+            logger.info(f"成功添加 {len(documents)} 个文档到向量存储")
+            
+        except Exception as e:
+            logger.error(f"批量添加文档到向量存储时出错: {str(e)}")
+            raise
+    
+    async def delete_by_parent_chunk_id(self, parent_chunk_id: str) -> bool:
+        """根据parent_chunk_id删除相关的小块数据
+        
+        Args:
+            parent_chunk_id: 大块ID
+            
+        Returns:
+            删除是否成功
+        """
+        try:
+            all_data = self.collection.get(where={"parent_chunk_id": parent_chunk_id})
+            ids_to_delete = all_data.get('ids', [])
+            
+            if ids_to_delete:
+                self.collection.delete(ids=ids_to_delete)
+                logger.info(f"成功删除parent_chunk_id {parent_chunk_id} 的 {len(ids_to_delete)} 条向量记录")
+            else:
+                logger.warning(f"未找到parent_chunk_id {parent_chunk_id} 的向量记录")
+            return True
+                
+        except Exception as e:
+            logger.error(f"删除parent_chunk_id向量数据时出错: {str(e)}")
+            return False
+    
     def get_retriever(self, search_type: str = "similarity", **kwargs: Any) -> "VectorStoreRetriever":
         """获取检索器"""
         return VectorStoreRetriever(self, search_type, **kwargs)

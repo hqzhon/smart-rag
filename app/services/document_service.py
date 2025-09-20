@@ -13,6 +13,7 @@ from app.models.document_models import Document, ProcessingResult
 from app.processors.document_processor import DocumentProcessor
 from app.services.multi_format_processor import MultiFormatProcessor, ProcessingError
 from app.embeddings.text_splitter import MedicalTextSplitter
+from app.text_processing.small_to_big_processor import SmallToBigProcessor
 from app.utils.logger import setup_logger
 from app.storage.database import DatabaseManager
 from app.core.config import get_settings
@@ -36,11 +37,11 @@ class DocumentService:
         os.makedirs(self.processed_dir, exist_ok=True)
         
         # 初始化轻量级组件
-        self.document_processor = DocumentProcessor(self.upload_dir, self.processed_dir)
+        self.document_processor = DocumentProcessor(self.upload_dir, self.processed_dir) 
         self.multi_format_processor = MultiFormatProcessor()
-        self.text_splitter = MedicalTextSplitter(
-            enable_semantic=self.settings.enable_semantic_chunking
-        )
+        
+        # 初始化小-大检索处理器
+        self.small_to_big_processor = None
         
         # 延迟初始化重量级组件
         self.db_manager = None
@@ -55,6 +56,12 @@ class DocumentService:
         logger.info("开始异步初始化文档服务重量级组件...")
         # 异步初始化数据库管理器
         self.db_manager = DatabaseManager()
+        
+        # 初始化小-大检索处理器
+        if self.small_to_big_processor is None:
+            self.small_to_big_processor = SmallToBigProcessor()
+            await self.small_to_big_processor.async_init()
+        
         logger.info("文档服务异步初始化完成")
     
     def _parse_file_size(self, size_str: str) -> int:
@@ -205,7 +212,7 @@ class DocumentService:
             raise ValueError(f"文件类型不匹配: {content_type}，期望: {expected_mime_types}")
     
     async def process_document(self, document: Document) -> ProcessingResult:
-        """处理文档，提取文本、分块并进行向量化
+        """处理文档，提取文本、分块并进行向量化（仅使用小-大检索策略）
         
         Args:
             document: 文档对象
@@ -213,214 +220,96 @@ class DocumentService:
         Returns:
             处理结果
         """
+        start_time = datetime.now()
+        logger.info(f"开始处理文档: {document.filename} (ID: {document.id})")
+
         try:
-            logger.info(f"开始处理文档: {document.filename}")
-            start_time = datetime.now()
-            
-            # 更新处理状态
-            document.processing_status = "processing"
-            document.status = "processing"  # 更新整体状态为processing
-            
-            # 更新数据库中的状态
+            # 1. 更新状态并发布进度
             self.db_manager.update_document(document.id, {'status': 'processing'})
-            
-            # 发布开始处理进度
-            self._publish_progress(document.id, "processing", 30, "开始处理文档内容")
-            
-            # 使用DocumentProcessor处理文档（包含元数据处理）
+            self._publish_progress(document.id, "processing", 30, "开始解析文档内容")
+
+            # 2. 解析文档内容
             try:
-                logger.info(f"开始执行：process_single_document")
-                result = await self.document_processor.process_single_document(document.file_path, document.id)
-                # 发布文档解析完成进度
-                self._publish_progress(document.id, "parsed", 50, "文档内容解析完成")
+                extracted_data = await self.document_processor.process_single_document(document.file_path, document.id) 
             except Exception as e:
-                logger.error(f"文档处理器处理失败: {str(e)}")
-                # 如果DocumentProcessor失败，尝试MultiFormatProcessor
-                try:
-                    logger.info("回退到多格式处理器")
-                    result = await self.multi_format_processor.process_document_async(document.file_path)
-                    # 发布文档解析完成进度
-                    self._publish_progress(document.id, "parsed", 50, "文档内容解析完成")
-                except ProcessingError as fallback_error:
-                    logger.error(f"多格式处理器也失败: {str(fallback_error)}")
-                    raise e
+                logger.warning(f"EnhancedPDFProcessor失败: {e}, 回退到MultiFormatProcessor...")
+                extracted_data = await self.multi_format_processor.process_document_async(document.file_path)
             
-            # 文本分块 - 转换为text_splitter期望的格式
-            self._publish_progress(document.id, "chunking", 60, "开始文本分块")
-            document_for_splitting = {
-                "text": result.get("text", result.get("standardized_text", result.get("cleaned_text", result.get("raw_text", "")))),
-                "filename": document.filename,
-                "tables": result.get("tables", result.get("metadata", {}).get("tables", [])),
-                "references": result.get("references", result.get("metadata", {}).get("references", []))
-            }
-            chunks = self.text_splitter.split_documents([document_for_splitting])
-            self._publish_progress(document.id, "chunked", 70, f"文本分块完成，共{len(chunks)}个块")
+            self._publish_progress(document.id, "parsed", 50, "文档内容解析完成")
+
+            content = extracted_data.get('text', '')
+            document_title = extracted_data.get('title', document.filename) or document.filename 
+
+            if not content.strip():
+                raise ProcessingError("文档内容为空，无法处理。")
+
+            # 3. 执行小-大检索处理流程 (这是唯一的处理路径)
+            logger.info(f"文档 {document.id} 将采用 [小-大检索] 模式处理")
+            self._publish_progress(document.id, "small_to_big_processing", 65, "开始小-大分块与处理")
             
-            # 获取提取的标题
-            document_title = result.get('title', document.filename)
-            if not document_title or document_title.strip() == '':
-                document_title = document.filename
-            
-            # 计算处理时间
-            processing_time = (datetime.now() - start_time).total_seconds()
-            
-            # 获取文档内容
-            content = result.get('text', result.get('standardized_text', result.get('cleaned_text', result.get('raw_text', ''))))
-            logger.info(f"准备保存文档内容，长度: {len(content)}")
-            
-            # 使用数据库事务确保向量化和MySQL更新的原子性
-            try:
-                # 开始事务：先更新数据库，再进行向量化
-                # 构建文档数据，包含多格式处理的元数据
-                metadata = result.get('metadata', {})
-                doc_data = {
-                    'id': document.id,
-                    'title': document_title,  # 使用提取的标题
-                    'content': content,
-                    'file_path': document.file_path,
-                    'file_size': document.file_size,
-                    'file_type': document.content_type,
-                    'file_format': metadata.get('file_format', Path(document.filename).suffix.lower()),
-                    'original_filename': document.filename,
-                    'total_pages': metadata.get('total_pages', 0),
-                    'total_sheets': metadata.get('total_sheets', 0),
-                    'total_slides': metadata.get('total_slides', 0),
-                    'element_types': metadata.get('element_types', []),
-                    'processing_start_time': start_time,
-                    'processing_end_time': datetime.now(),
-                    'metadata': {
-                        'original_filename': document.filename,
-                        'chunks_count': len(chunks),
-                        'processing_time': processing_time,
-                        'tables_count': len(result.get('tables', [])),
-                        'references_count': len(result.get('references', [])),
-                        'images_count': len(result.get('images', [])),
-                        'processing_status': 'completed',
-                        'vectorized': False,
-                        'vectorization_status': 'processing',
-                        'file_format': metadata.get('file_format', Path(document.filename).suffix.lower()),
-                        'total_pages': metadata.get('total_pages', 0),
-                        'total_sheets': metadata.get('total_sheets', 0),
-                        'total_slides': metadata.get('total_slides', 0),
-                        'element_types': metadata.get('element_types', [])
-                    }
-                }
-                
-                # 更新数据库中的文档信息（包含处理后的内容）
-                doc_data['status'] = 'processing'  # 设置状态为processing
-                self.db_manager.save_document(doc_data)
-                logger.info(f"文档内容已更新到数据库: {document.id}")
-                self._publish_progress(document.id, "saved_content", 80, "文档内容已保存到数据库")
-                
-                # 进行向量化处理
-                self._publish_progress(document.id, "vectorizing", 85, "开始向量化处理")
-                await self._vectorize_document_chunks(document.id, document, chunks, document_title)
-                logger.info(f"文档向量化完成: {document.id}")
-                self._publish_progress(document.id, "vectorized", 95, "向量化处理完成")
-                
-                # 向量化成功后，更新向量化状态
-                vectorization_update = {
-                    'vectorized': True,
-                    'vectorization_status': 'completed',
-                    'vectorization_time': datetime.now()
-                }
-                
-                # 更新元数据中的向量化状态
-                doc_data['metadata'].update({
-                    'vectorized': True,
-                    'vectorization_status': 'completed'
-                })
-                
-                self.db_manager.update_document(document.id, {
-                    'vectorized': True,
-                    'vectorization_status': 'completed',
-                    'status': 'chat_ready',  # 向量化完成后设置为chat_ready状态
-                    'metadata': doc_data['metadata']
-                })
-                
-                logger.info(f"文档处理和向量化事务完成: {document.id}")
-                
-            except Exception as transaction_error:
-                logger.error(f"文档处理事务失败: {str(transaction_error)}")
-                
-                # 发布错误进度
-                self._publish_progress(document.id, "error", 0, f"处理失败: {str(transaction_error)}")
-                
-                # 回滚：更新数据库状态为失败
-                try:
-                    self.db_manager.update_document(document.id, {
-                        'vectorized': False,
-                        'vectorization_status': 'failed',
-                        'status': 'failed',  # 设置整体状态为failed
-                        'metadata': {
-                            'processing_status': 'failed',
-                            'error_message': str(transaction_error),
-                            'vectorized': False,
-                            'vectorization_status': 'failed'
-                        }
-                    })
-                    logger.info(f"文档状态已回滚为失败: {document.id}")
-                except Exception as rollback_error:
-                    logger.error(f"状态回滚失败: {str(rollback_error)}")
-                
-                # 重新抛出异常
-                raise transaction_error
-            
-            # 更新文档状态
-            document.processed = True
-            document.processing_status = "completed"
-            document.status = "chat_ready"  # 设置最终状态为chat_ready
-            
-            # 发布完成进度
-            self._publish_progress(document.id, "chat_ready", 100, f"文档处理完成，耗时{processing_time:.1f}秒")
-            
-            # 创建处理结果
-            processing_result = ProcessingResult(
+            s2b_result = await self.small_to_big_processor.process_document(
                 document_id=document.id,
-                success=True,
-                total_chunks=len(chunks),
-                processing_time=processing_time,
-                extracted_text_length=len(content),
-                tables_count=len(result.get("tables", [])),
-                references_count=len(result.get("references", [])),
-                images_count=len(result.get("images", []))
+                content=content,
+                document_title=document_title
             )
+            if not s2b_result.get('success'):
+                raise Exception(f"小-大检索处理失败: {s2b_result.get('error', '未知错误')}")
             
-            logger.info(f"文档处理和向量化完成: {document.filename}, 耗时: {processing_time:.2f}秒")
-            return processing_result
+            total_chunks = s2b_result.get('parent_chunks_count', 0)
+            logger.info(f"小-大检索处理成功, 父块数: {total_chunks}")
+
+            # 4. 最终化处理：更新数据库状态和元数据
+            processing_time = (datetime.now() - start_time).total_seconds()
+            final_metadata = self._build_final_metadata(document, extracted_data, total_chunks, processing_time)
+
+            self.db_manager.update_document(document.id, {
+                'title': document_title,
+                'content': content, # 保存完整原文
+                'vectorized': True,
+                'vectorization_status': 'completed',
+                'vectorization_time': datetime.now(),
+                'status': 'chat_ready',
+                'metadata': final_metadata
+            })
             
-        except Exception as e:
-            logger.error(f"文档处理失败: {str(e)}")
-            document.processing_status = "failed"
-            document.error_message = str(e)
-            
-            # 更新数据库中的状态为失败
-            try:
-                self.db_manager.update_document(document.id, {
-                    'processed': False,
-                    'processing_status': 'failed',
-                    'status': 'failed',  # 设置整体状态为failed
-                    'metadata': {
-                        'processing_status': 'failed',
-                        'error_message': str(e),
-                        'vectorized': False,
-                        'vectorization_status': 'failed'
-                    }
-                })
-            except Exception as db_error:
-                logger.error(f"更新文档失败状态时出错: {str(db_error)}")
-            
-            # 发布处理失败进度
-            self._publish_progress(document.id, "failed", 0, f"文档处理失败: {str(e)}")
-            
+            self._publish_progress(document.id, "chat_ready", 100, f"文档就绪, 耗时{processing_time:.1f}秒")
+            logger.info(f"文档 {document.id} 处理完全成功.")
+
             return ProcessingResult(
                 document_id=document.id,
-                success=False,
-                total_chunks=0,
-                processing_time=0,
-                extracted_text_length=0,
-                error_message=str(e)
+                success=True,
+                total_chunks=total_chunks,
+                processing_time=processing_time,
+                extracted_text_length=len(content),
+                tables_count=len(extracted_data.get("tables", [])),
+                references_count=len(extracted_data.get("references", [])),
+                images_count=len(extracted_data.get("images", []))
             )
+        except Exception as e:
+            logger.error(f"文档 {document.id} 处理失败: {str(e)}")
+            self.db_manager.update_document(document.id, {
+                'status': 'error',
+                'vectorization_status': 'failed',
+                'metadata': {'error': error_message}  
+            })
+            self._publish_progress(document.id, "error", 100, f"处理失败: {str(e)}")
+            raise ProcessingError(f"文档处理失败: {str(e)}")
+
+    def _build_final_metadata(self, document: Document, extracted_data: dict, total_chunks: int, processing_time: float) -> dict:
+        """构建最终用于存储的元数据字典"""
+        return {
+            'original_filename': document.filename,
+            'chunks_count': total_chunks,
+            'processing_time': processing_time,
+            'tables_count': len(extracted_data.get('tables', [])),
+            'references_count': len(extracted_data.get('references', [])),
+            'images_count': len(extracted_data.get('images', [])),
+            'processing_status': 'completed',
+            'vectorized': True,
+            'vectorization_status': 'completed',
+            'file_format': extracted_data.get('metadata', {}).get('file_format', Path(document.filename).suffix.lower()),
+            'total_pages': extracted_data.get('metadata', {}).get('total_pages', 0),
+        }
     
     async def get_document(self, document_id: str) -> Optional[Document]:
         """获取文档信息
@@ -477,9 +366,16 @@ class DocumentService:
             file_path = document.get('file_path')
             logger.info(f"开始删除文档: {document_id}")
             
-            # 2. 删除向量存储中的数据（先删除向量数据，因为这个操作相对安全）
-            vector_store = VectorStore()
-            vector_deleted = await vector_store.delete_document(document_id)
+            # 小-大检索模式：删除大块和小块数据
+            if self.small_to_big_processor:
+                vector_deleted = await self.small_to_big_processor.delete_document_chunks(document_id)
+            else:
+                # 如果处理器未初始化，手动删除
+                vector_store = VectorStore()
+                vector_deleted = await vector_store.delete_document(document_id)
+                # 删除MySQL中的大块数据
+                db.delete_parent_chunks_by_document_id(document_id)
+            
             if not vector_deleted:
                 logger.error(f"删除向量存储数据失败: {document_id}")
                 return False
@@ -682,92 +578,7 @@ class DocumentService:
             "supported_formats": self.get_supported_formats()
         }
     
-    async def _vectorize_document_chunks(self, document_id: str, document: Document, text_chunks: list, document_title: str = None):
-        """对文档块进行向量化处理
-        
-        Args:
-            document_id: 文档ID
-            document: 文档信息
-            text_chunks: 文本块列表
-            document_title: 文档标题（可选）
-        """
-        try:
-            from app.storage.vector_store import VectorStore
-            from app.embeddings.embeddings import get_embeddings
-            
-            # 初始化向量存储
-            embedding_model = get_embeddings()
-            vector_store = VectorStore(embedding_model)
-            
-            # 使用传入的标题或文档文件名
-            title = document_title or document.filename
-            
-            # 准备向量化数据
-            formatted_documents = []
-            for i, chunk in enumerate(text_chunks):
-                # 处理不同格式的chunk数据
-                if isinstance(chunk, dict):
-                    # text_splitter返回的字典格式
-                    content = chunk.get('content', str(chunk))
-                    chunk_metadata = chunk.get('metadata', {})
-                elif hasattr(chunk, 'page_content'):
-                    # LangChain Document格式
-                    content = chunk.page_content
-                    chunk_metadata = getattr(chunk, 'metadata', {})
-                else:
-                    # 字符串格式
-                    content = str(chunk)
-                    chunk_metadata = {}
-                
-                formatted_doc = {
-                    "content": content,
-                    "metadata": {
-                        "document_id": document_id,
-                        "file_name": document.filename,
-                        "file_type": document.content_type,
-                        "title": title,  # 添加标题到元数据
-                        "source": title,  # 添加源文档名到元数据
-                        "chunk_index": i,
-                        "chunk_id": f"{document_id}_{i}",
-                        "created_at": document.upload_time.isoformat() if document.upload_time else None,
-                        # 合并原有的chunk元数据
-                        **chunk_metadata
-                    }
-                }
-                formatted_documents.append(formatted_doc)
-            
-            # 添加到向量存储
-            await vector_store.add_documents(formatted_documents)
-            
-            # 检查是否启用异步元数据处理
-            from app.core.config import get_settings
-            settings = get_settings()
-            
-            if getattr(settings, 'enable_async_metadata', True):
-                # 提交Celery任务生成关键词和摘要
-                from app.metadata.celery_tasks import generate_metadata_for_chunk
-                
-                for formatted_doc in formatted_documents:
-                    chunk_id = formatted_doc["metadata"]["chunk_id"]
-                    chunk_text = formatted_doc["content"]
-                    
-                    try:
-                        task = generate_metadata_for_chunk.delay(
-                            chunk_id,
-                            chunk_text,
-                            document_id
-                        )
-                        logger.debug(f"Celery任务已提交: chunk_id={chunk_id}, task_id={task.id}")
-                    except Exception as e:
-                        logger.error(f"提交Celery任务失败 chunk_id={chunk_id}: {e}")
-                
-                logger.info(f"文档 {document_id} 的 {len(text_chunks)} 个文本块已成功向量化，元数据生成任务已提交")
-            else:
-                logger.info(f"文档 {document_id} 的 {len(text_chunks)} 个文本块已成功向量化，异步元数据处理已禁用")
-            
-        except Exception as e:
-            logger.error(f"向量化文档块时出错: {str(e)}")
-            raise
+    
     
     async def update_vectorization_for_new_documents(self) -> int:
         """为新上传但未向量化的文档进行增量向量化更新
